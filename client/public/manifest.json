@@ -1,0 +1,17 @@
+{
+  "name": "NETRA AI - Assistive Companion",
+  "short_name": "NETRA AI",
+  "description": "AI-powered environmental vision and safety companion for visually impaired people.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#f59e0b",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

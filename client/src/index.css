@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-primary: #f8fafc;
+    --text-primary: #0f172a;
+    --accent-amber: #d97706;
+    --accent-blue: #0284c7;
+    --danger-red: #dc2626;
+  }
+
+  /* High contrast mode for visually impaired users */
+  body.high-contrast {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  body.high-contrast button {
+    border: 3px solid #000000 !important;
+    font-weight: 800 !important;
+  }
+
+  /* Large legible focus states for accessibility (WCAG 2.1) */
+  *:focus-visible {
+    outline: 4px solid #f59e0b !important;
+    outline-offset: 3px !important;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.6;
+  background-color: #f8fafc;
+  color: #0f172a;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography Specifications */
+/* 1. Logo: Poppins Bold, 700 */
+.font-logo {
+  font-family: 'Poppins', sans-serif !important;
+  font-weight: 700 !important;
+}
+
+/* 2. Main heading: Poppins SemiBold, 600 (Desktop: 48-60px, Mobile: 34-40px) */
+.main-heading, h1 {
+  font-family: 'Poppins', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: clamp(34px, 4.5vw, 54px) !important;
+  line-height: 1.18 !important;
+  letter-spacing: -0.025em;
+}
+
+/* 3. Section headings: Inter SemiBold, 600 */
+.section-heading, h2, h3, h4 {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 600 !important;
+}
+
+/* 4. Body text: Inter Regular, 400; 16-18px */
+.body-text, p, .text-body {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 400;
+  font-size: 17px;
+  line-height: 1.625;
+}
+
+/* 5. Buttons: Inter Medium, 500 */
+.btn-font, button, [role="button"] {
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500;
+}
+
+/* 
+  Automatically adjustable background image according to device screen size
+  Strictly applied to the page area (Never in Header or Footer)
+  100% Completely Visible in Full Vivid Resolution
+*/
+.netra-page-bg {
+  background-image: url('/netra-bg.jpg');
+  background-repeat: no-repeat;
+  background-position: center top;
+  background-size: cover;
+  background-attachment: fixed;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+@media (max-width: 1024px) {
+  .netra-page-bg {
+    background-size: 100% auto;
+    background-position: top center;
+    background-attachment: scroll;
+  }
+}
+
+/* Pulsing radar effect for SOS / Location sharing */
+@keyframes radar-pulse-light {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.5);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 22px rgba(220, 38, 38, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+  }
+}
+
+.radar-pulse-anim {
+  animation: radar-pulse-light 2s infinite;
+}
+
+@keyframes scan-line {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 96%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+
+.scanning-line-anim {
+  animation: scan-line 3s ease-in-out infinite;
+}
