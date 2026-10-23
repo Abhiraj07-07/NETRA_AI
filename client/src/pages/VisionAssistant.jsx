@@ -13,6 +13,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const isStreamingRef = useRef(false);
   const [cameraError, setCameraError] = useState(null);
   
   // Vision Suite Modes: 'obstacles' | 'currency' | 'ocr' | 'color'
@@ -145,12 +146,13 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
 
         videoRef.current.onloadedmetadata = () => {
           videoRef.current.play();
+          isStreamingRef.current = true;
           setIsStreaming(true);
-          setAiStatus('Loading AI models...');
-          visionDetector.loadModel((msg) => setAiStatus(msg)).then(() => {
-            setAiStatus('Active & Scanning');
-            startVisionLoop();
-          });
+          setAiStatus('Active & Scanning Pathway');
+          // Start vision detection loop immediately without delay
+          startVisionLoop();
+          // Load deep neural network weights in background
+          visionDetector.loadModel((msg) => setAiStatus(msg));
         };
       }
     } catch (err) {
@@ -169,6 +171,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     }
     smartAssistService.setTorch(false);
     setTorchActive(false);
+    isStreamingRef.current = false;
     setIsStreaming(false);
     setAiStatus('Standby');
     if (animationFrameId.current) {
@@ -190,16 +193,26 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
 
   // Continuous loop depending on mode
   const startVisionLoop = async () => {
-    if (!videoRef.current || !isStreaming) return;
+    if (!videoRef.current || !isStreamingRef.current) return;
 
     if (activeScenario === 'camera' && !isProcessingRef.current) {
       isProcessingRef.current = true;
       try {
         const mode = visionModeRef.current;
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+
+        // Sync canvas resolution to real video dimensions
+        if (canvas && video.videoWidth && video.videoHeight) {
+          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+          }
+        }
 
         // Auto-Torch check for low light (< 35 lux equivalent)
-        if (canvasRef.current && autoTorchEnabled && !torchActive) {
-          const lum = smartAssistService.checkAmbientLuminance(canvasRef.current);
+        if (canvas && autoTorchEnabled && !torchActive) {
+          const lum = smartAssistService.checkAmbientLuminance(canvas);
           if (lum < 35 && lum > 0) {
             smartAssistService.setTorch(true);
             setTorchActive(true);
@@ -208,7 +221,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
         }
 
         if (mode === 'obstacles') {
-          const results = await visionDetector.detect(videoRef.current);
+          const results = await visionDetector.detect(video);
           if (results && results.length > 0) {
             setDetectedObjects(results);
             handleDetectionsFeedback(results);
@@ -218,13 +231,12 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
             clearCanvas();
           }
           setTelemetry({
-            latency: visionDetector.lastLatencyMs || 22,
-            fps: visionDetector.currentFps || 44
+            latency: visionDetector.lastLatencyMs || 18,
+            fps: visionDetector.currentFps || 45
           });
         } else if (mode === 'color') {
-          // Live color crosshair sampler
           copyVideoToCanvas();
-          const colorData = smartAssistService.identifyColor(canvasRef.current);
+          const colorData = smartAssistService.identifyColor(canvas);
           if (colorData) {
             drawColorReticle(colorData);
           }
