@@ -321,9 +321,19 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     }
 
     if (speechAnnounceEnabled) {
-      const zoneWord = primary.zone === 'center' ? 'ahead' : `on your ${primary.zone}`;
-      const msg = `Caution: ${primary.label} ${zoneWord}, ${primary.distance} meters.`;
-      speechService.speak(msg, { minIntervalMs: 3000 });
+      let msg = '';
+      if (primary.label.includes('WALL')) {
+        if (primary.distance <= 1.0 && primary.zone === 'center') {
+          msg = `Stop! Wall directly ahead, ${primary.distance} meters. Pathway blocked.`;
+        } else {
+          const zoneWord = primary.zone === 'center' ? 'ahead' : `on your ${primary.zone}`;
+          msg = `Caution: Wall ${zoneWord}, ${primary.distance} meters.`;
+        }
+      } else {
+        const zoneWord = primary.zone === 'center' ? 'ahead' : `on your ${primary.zone}`;
+        msg = `Caution: ${primary.label} ${zoneWord}, ${primary.distance} meters.`;
+      }
+      speechService.speak(msg, { minIntervalMs: 2500 });
       logAnnouncement(msg, primary.zone);
     }
   };
@@ -838,9 +848,23 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
               Click any scenario to test instant speech readouts and assistive algorithms without needing physical items:
             </p>
 
-            {/* Presets: Obstacles Mode */}
+            {/* Presets: Obstacles & Walls Mode */}
             {visionMode === 'obstacles' && (
               <div className="grid grid-cols-1 gap-2">
+                <button
+                  onClick={() => triggerDemoScenario('wall_ahead')}
+                  className="w-full py-2.5 px-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-300 text-left text-xs font-bold text-red-950 flex items-center justify-between transition-colors shadow-xs"
+                >
+                  <span>🧱 Wall Directly Ahead (0.8m Urgent)</span>
+                  <span className="text-[10px] text-red-600 font-mono font-bold">Stop Alert</span>
+                </button>
+                <button
+                  onClick={() => triggerDemoScenario('left_wall')}
+                  className="w-full py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-amber-50 border border-slate-200 text-left text-xs font-semibold text-slate-800 hover:border-amber-400 flex items-center justify-between transition-colors shadow-xs"
+                >
+                  <span>🧱 Corridor Wall Left (1.1m)</span>
+                  <span className="text-[10px] text-amber-700 font-mono font-bold">Shoreline</span>
+                </button>
                 <button
                   onClick={() => triggerDemoScenario('left_person')}
                   className="w-full py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-amber-50 border border-slate-200 text-left text-xs font-semibold text-slate-800 hover:border-amber-400 flex items-center justify-between transition-colors shadow-xs"
