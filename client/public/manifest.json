@@ -1,17 +1,44 @@
 {
+  "id": "/?source=pwa",
   "name": "NETRA AI - Assistive Companion",
   "short_name": "NETRA AI",
   "description": "AI-powered environmental vision and safety companion for visually impaired people.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "any",
   "background_color": "#020617",
   "theme_color": "#f59e0b",
+  "lang": "en-IN",
+  "categories": ["accessibility", "utilities", "health"],
   "icons": [
     {
-      "src": "/favicon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "NETRA AI Desktop Dashboard"
+    },
+    {
+      "src": "/screenshot2.png",
+      "sizes": "540x960",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "NETRA AI Mobile Assistive Vision"
     }
   ]
 }
