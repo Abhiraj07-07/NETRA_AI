@@ -1,6 +1,15 @@
 // API client for NETRA AI Backend
+// Dynamically resolves to Vite proxy (/api) on port 5173, current IP on LAN, or localhost:5000
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    if (window.location.port === '5173') return '/api';
+    return `http://${window.location.hostname}:5000/api`;
+  }
+  return 'http://localhost:5000/api';
+};
 
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = getBaseUrl();
 
 async function request(endpoint, options = {}) {
   try {

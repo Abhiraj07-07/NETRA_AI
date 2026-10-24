@@ -6,11 +6,16 @@ class SocketService {
     this.listeners = new Map();
   }
 
-  connect(url = 'http://localhost:5000') {
+  connect(url) {
     if (this.socket) return this.socket;
 
+    const defaultUrl = typeof window !== 'undefined' 
+      ? (window.location.port === '5173' ? window.location.origin : `http://${window.location.hostname}:5000`)
+      : 'http://localhost:5000';
+    const targetUrl = url || defaultUrl;
+
     try {
-      this.socket = io(url, {
+      this.socket = io(targetUrl, {
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
         transports: ['websocket', 'polling']
