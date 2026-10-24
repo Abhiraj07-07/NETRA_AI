@@ -47,12 +47,6 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('netra:voice-intent', { detail: intentObj }));
 
     switch (intent) {
-      case 'CURRENCY':
-        setVisionMode('currency');
-        setCurrentPage('vision');
-        speechService.speak(speech, { priority: true });
-        break;
-
       case 'MEDICINE_OCR':
         setVisionMode('ocr');
         setCurrentPage('vision');
@@ -140,7 +134,7 @@ export default function App() {
 
       case 'READ_SCREEN': {
         const pageDesc = {
-          home: "You are on the Home screen. Say Currency, Medicine, Color, Vision, SOS, Location, Hazards, or Family.",
+          home: "You are on the Home screen. Say Medicine, Color, Vision, SOS, Location, Hazards, or Family.",
           vision: "You are on Vision Assistant. Real-time scanning is active.",
           sos: "You are on Panic SOS. Immediate siren and SMS GPS dispatch available.",
           location: "You are on Live Location Sharing. Streaming GPS to guardians.",
@@ -159,7 +153,7 @@ export default function App() {
 
       case 'UNKNOWN':
       default:
-        speechService.speak(speech || `Heard: "${rawText}". Say Currency, Camera, Medicine, or SOS.`);
+        speechService.speak(speech || `Heard: "${rawText}". Say Camera, Describe Scene, Medicine, or SOS.`);
         break;
     }
   }, []); // Stable [] dependency array

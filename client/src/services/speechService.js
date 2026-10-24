@@ -170,22 +170,7 @@ class SpeechService {
     if (!rawText) return null;
     const text = rawText.toLowerCase().trim().replace(/[.,!?;:]/g, '');
 
-    // 1. CURRENCY (₹10 - ₹500 Notes)
-    if (
-      text.includes('currency') || text.includes('paisa') || text.includes('paise') || 
-      text.includes('rupaye') || text.includes('rupee') || text.includes('rupees') || 
-      text.includes('note') || text.includes('kitne ka') || text.includes('kitna') ||
-      text.includes('money') || text.includes('cash') ||
-      text.includes('पैसे') || text.includes('रुपया') || text.includes('रुपये') || text.includes('नोट') || text.includes('करेंसी')
-    ) {
-      return { 
-        intent: 'CURRENCY', 
-        speech: "Opening Indian Currency Reader. Align note inside camera frame.",
-        feedback: "Action: Opened Currency Reader (₹10 - ₹500)"
-      };
-    }
-
-    // 2. MEDICINE & TEXT OCR
+    // 1. MEDICINE & TEXT OCR
     if (
       text.includes('medicine') || text.includes('dawai') || text.includes('dawa') || 
       text.includes('strip') || text.includes('tablet') || text.includes('goli') || 
@@ -449,7 +434,7 @@ class SpeechService {
     if (text.includes('help') || text.includes('options') || text.includes('command') || text.includes('kya bolu')) {
       return {
         intent: 'HELP',
-        speech: "Say Vision, Currency, Medicine, Color, SOS, Location, Hazards, or Family.",
+        speech: "Say Vision, Describe Scene, Medicine, Color, SOS, Location, Hazards, or Family.",
         feedback: "Action: Spoke Available Commands"
       };
     }
@@ -458,7 +443,7 @@ class SpeechService {
     return {
       intent: 'UNKNOWN',
       rawText: text,
-      speech: `Heard "${text}". Try saying Vision, Currency, Medicine, or SOS.`,
+      speech: `Heard "${text}". Try saying Vision, Describe Scene, Medicine, or SOS.`,
       feedback: `Heard: "${text}"`
     };
   }

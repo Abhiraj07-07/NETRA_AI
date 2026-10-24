@@ -46,7 +46,7 @@ export default function Home({ onSelectPage, activeSOSCount, locationSharingActi
         <button
           onClick={() => onSelectPage('vision')}
           className="group relative bg-white/80 hover:bg-white/95 backdrop-blur-md border-2 border-white/90 hover:border-amber-500 focus:border-amber-500 focus:outline-none rounded-2xl p-6 transition-all hover:shadow-xl shadow-md flex flex-col justify-between text-left"
-          aria-label="Key 1: Start Vision Assistant. Real-time camera obstacle detection, currency reader, medicine OCR, and color identifier"
+          aria-label="Key 1: Start Vision Assistant. Real-time camera obstacle detection, AI scene description, medicine OCR, and color identifier"
         >
           <div className="flex items-center justify-between mb-4">
             <div className="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-700 group-hover:scale-110 transition-transform shadow-xs">
@@ -62,10 +62,10 @@ export default function Home({ onSelectPage, activeSOSCount, locationSharingActi
               <span className="text-[10px] bg-amber-200 text-amber-950 font-black px-1.5 py-0.5 rounded">NEW</span>
             </h2>
             <p className="text-sm text-slate-700 font-medium mb-3">
-              Obstacle radar with spatial audio, Indian currency notes (₹10–₹500), medicine strip OCR, and clothing colors.
+              Obstacle radar with spatial audio, AI multimodal scene description, medicine strip OCR, and clothing colors.
             </p>
             <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
-              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md border border-emerald-200">₹ Currency</span>
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md border border-emerald-200">✨ AI Describe</span>
               <span className="px-2 py-0.5 bg-sky-100 text-sky-900 rounded-md border border-sky-200">💊 Medicine OCR</span>
               <span className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded-md border border-purple-200">🎨 Colors</span>
               <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md border border-amber-200">🔦 Torch</span>

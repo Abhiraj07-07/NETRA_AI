@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, CameraOff, Volume2, ArrowLeft, VolumeX, AlertTriangle, 
-  Sparkles, Sliders, Banknote, FileText, Palette, Flashlight, 
+  Sparkles, Sliders, FileText, Palette, Flashlight, 
   FlashlightOff, Scan, ShieldAlert, CheckCircle2, RefreshCw
 } from 'lucide-react';
 import { visionDetector } from '../services/visionDetector';
@@ -17,7 +17,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   const isStreamingRef = useRef(false);
   const [cameraError, setCameraError] = useState(null);
   
-  // Vision Suite Modes: 'obstacles' | 'currency' | 'ocr' | 'color'
+  // Vision Suite Modes: 'obstacles' | 'ocr' | 'color'
   const [visionMode, setVisionMode] = useState(initialMode || 'obstacles');
   const [torchActive, setTorchActive] = useState(false);
   const [autoTorchEnabled, setAutoTorchEnabled] = useState(true);
@@ -53,10 +53,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     const unsubscribeIntent = speechService.addIntentListener((intentObj) => {
       if (!intentObj) return;
       const { intent } = intentObj;
-      if (intent === 'CURRENCY') {
-        switchMode('currency', true);
-        setTimeout(handleManualScan, 300);
-      } else if (intent === 'MEDICINE_OCR') {
+      if (intent === 'MEDICINE_OCR') {
         switchMode('ocr', true);
         setTimeout(handleManualScan, 300);
       } else if (intent === 'COLOR') {
@@ -122,9 +119,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     
     if (silent) return;
 
-    if (mode === 'currency') {
-      speechService.speak("Currency Reader Mode. Point camera at any Indian rupee note ₹10 to ₹500.", { priority: true });
-    } else if (mode === 'ocr') {
+    if (mode === 'ocr') {
       speechService.speak("Smart Text and Medicine OCR Mode. Point at medicine packaging, dosage, or signage.", { priority: true });
     } else if (mode === 'color') {
       speechService.speak("Color Identifier Mode. Aim central target at clothes or objects.", { priority: true });
@@ -252,9 +247,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
           if (colorData) {
             drawColorReticle(colorData);
           }
-        } else if (mode === 'currency') {
-          copyVideoToCanvas();
-          drawCurrencyReticle();
         } else if (mode === 'ocr') {
           copyVideoToCanvas();
           drawOcrReticle();
@@ -278,7 +270,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
   };
 
-  // Manual Scan Trigger for Currency, Medicine OCR, or Color
+  // Manual Scan Trigger for Medicine OCR or Color
   const handleManualScan = async () => {
     // 1. Immediately grab the fresh live video frame into canvas
     copyVideoToCanvas();
@@ -290,54 +282,13 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     const mode = visionModeRef.current;
 
     try {
-      if (mode === 'currency') {
-        let recognizedNote = null;
-
-        // Try Gemini Vision API first if key is present
-        if (aiVisionService.hasApiKey()) {
-          setAiStatus('AI reading currency note...');
-          const base64 = aiVisionService.getCanvasBase64(canvas);
-          if (base64) {
-            try {
-              const geminiText = await aiVisionService.describeCurrencyWithGemini(base64);
-              if (geminiText && !geminiText.includes('कृपया नोट')) {
-                recognizedNote = {
-                  value: '₹',
-                  label: 'AI Banknote Identifier',
-                  hindi: geminiText,
-                  color: 'Gemini Multimodal AI',
-                  confidence: 99
-                };
-              }
-            } catch (geminiErr) {
-              console.warn('Gemini currency recognition fallback to local:', geminiErr);
-            }
-          }
-        }
-
-        // Offline / Built-in color signature matching
-        if (!recognizedNote) {
-          recognizedNote = smartAssistService.recognizeCurrency(canvas);
-        }
-
-        if (recognizedNote) {
-          setSmartResult(recognizedNote);
-          const msg = recognizedNote.hindi ? `पहचाना गया: ${recognizedNote.hindi}` : `Recognized ${recognizedNote.label}. ${recognizedNote.hindi}.`;
-          speechService.speak(msg, { priority: true });
-          logAnnouncement(msg, 'currency');
-        } else {
-          const promptMsg = "नोट स्पष्ट नहीं दिख रहा है। कृपया नोट को सीधा करके कैमरे के थोड़ा पास लाएं।";
-          speechService.speak(promptMsg, { priority: true });
-          setSmartResult({
-            value: '?',
-            label: 'Note Not Detected',
-            hindi: 'कृपया नोट को कैमरे के सामने सीधा लाएं',
-            color: 'Align Note in Center',
-            confidence: 0
-          });
-          logAnnouncement("Currency scan: Note not aligned", 'currency');
-        }
-      } else if (mode === 'ocr') {
+      if (mode === 'ocr') {
+        const ocrData = smartAssistService.getDemoMedicalOcr('paracetamol');
+        setSmartResult(ocrData);
+        const msg = `Medicine Label: ${ocrData.title}. Dosage: ${ocrData.dosage}. ${ocrData.expiry}. Warning: ${ocrData.caution}.`;
+        speechService.speak(msg, { priority: true });
+        logAnnouncement(msg, 'ocr');
+      } else if (mode === 'color') {
         const ocrData = smartAssistService.getDemoMedicalOcr('paracetamol');
         setSmartResult(ocrData);
         const msg = `Medicine Label: ${ocrData.title}. Dosage: ${ocrData.dosage}. ${ocrData.expiry}. Warning: ${ocrData.caution}.`;
@@ -436,15 +387,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     drawBoundingBoxes(demoItems);
   };
 
-  // Demo triggers for Currency
-  const triggerDemoCurrency = (val) => {
-    const res = smartAssistService.getDemoCurrency(val);
-    setSmartResult(res);
-    const msg = `Identified: ${res.label}. ${res.hindi}. Motifs: ${res.image}. Confidence: ${res.confidence}%.`;
-    speechService.speak(msg, { priority: true });
-    logAnnouncement(msg, 'currency');
-  };
-
   // Demo triggers for Medicine OCR
   const triggerDemoOcr = (key) => {
     const res = smartAssistService.getDemoMedicalOcr(key);
@@ -488,44 +430,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
       ctx.fillStyle = '#ffffff';
       ctx.fillText(labelText, x + 6, Math.max(16, y - 6));
     });
-  };
-
-  // Drawing: Currency Alignment Box Reticle
-  const drawCurrencyReticle = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width;
-    const h = canvas.height;
-
-    // Currency box in center
-    const boxW = w * 0.7;
-    const boxH = boxW * 0.48; // Standard Indian Note aspect ratio ~ 2:1
-    const x = (w - boxW) / 2;
-    const y = (h - boxH) / 2;
-
-    ctx.strokeStyle = '#10b981';
-    ctx.lineWidth = 3;
-    ctx.setLineDash([12, 8]);
-    ctx.strokeRect(x, y, boxW, boxH);
-    ctx.setLineDash([]);
-
-    // Corner brackets
-    const cLen = 24;
-    ctx.strokeStyle = '#34d399';
-    ctx.lineWidth = 5;
-    // Top-Left
-    ctx.beginPath(); ctx.moveTo(x, y + cLen); ctx.lineTo(x, y); ctx.lineTo(x + cLen, y); ctx.stroke();
-    // Top-Right
-    ctx.beginPath(); ctx.moveTo(x + boxW - cLen, y); ctx.lineTo(x + boxW, y); ctx.lineTo(x + boxW, y + cLen); ctx.stroke();
-    // Bottom-Left
-    ctx.beginPath(); ctx.moveTo(x, y + boxH - cLen); ctx.lineTo(x, y + boxH); ctx.lineTo(x + cLen, y + boxH); ctx.stroke();
-    // Bottom-Right
-    ctx.beginPath(); ctx.moveTo(x + boxW - cLen, y + boxH); ctx.lineTo(x + boxW, y + boxH); ctx.lineTo(x + boxW, y + boxH - cLen); ctx.stroke();
-
-    ctx.fillStyle = '#10b981';
-    ctx.font = 'bold 13px Inter, sans-serif';
-    ctx.fillText('₹ INDIAN CURRENCY SCANNER (₹10 - ₹500)', x, y - 10);
   };
 
   // Drawing: OCR Text Alignment Scan Reticle
@@ -614,7 +518,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
               Vision & Smart Assist Suite
             </h1>
             <p className="text-xs text-slate-500 font-medium">
-              Obstacles • Indian Currency Reader • Medicine OCR • Color Identifier
+              Obstacles • Medicine OCR • Color Identifier • AI Scene Describe
             </p>
           </div>
         </div>
@@ -645,18 +549,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
           >
             <Sliders className="w-4 h-4" />
             <span>🚶 Obstacle Radar</span>
-          </button>
-
-          <button
-            onClick={() => switchMode('currency')}
-            className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-              visionMode === 'currency'
-                ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/20'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
-          >
-            <Banknote className="w-4 h-4" />
-            <span>💵 Currency (₹10 - ₹500)</span>
           </button>
 
           <button
@@ -810,7 +702,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
                 )}
               </button>
 
-              {/* Instant Scan Frame Button for Currency / OCR / Color */}
+              {/* Instant Scan Frame Button for OCR / Color */}
               {visionMode !== 'obstacles' && (
                 <button
                   onClick={handleManualScan}
@@ -862,7 +754,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
             </div>
           </div>
 
-          {/* Smart Result Card Display (for Currency, OCR, or Color) */}
+          {/* Smart Result Card Display (for OCR or Color) */}
           {smartResult && (
             <div className="p-5 rounded-3xl bg-white border-2 border-emerald-400 shadow-sm space-y-3">
               <div className="flex items-center justify-between">
@@ -890,20 +782,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
                   <p className="text-sm font-bold text-slate-900 leading-relaxed bg-purple-50 p-3.5 rounded-2xl border border-purple-200 shadow-xs">
                     "{smartResult.text}"
                   </p>
-                </div>
-              )}
-
-              {/* Currency Card */}
-              {visionMode === 'currency' && (
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-600 text-white font-black text-xl flex items-center justify-center shrink-0 shadow-sm">
-                    ₹{smartResult.value}
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-lg font-bold text-slate-900">{smartResult.label}</h3>
-                    <p className="text-sm font-semibold text-emerald-800">{smartResult.hindi}</p>
-                    <p className="text-xs text-slate-600 font-medium">Color Tone: {smartResult.color} • Confidence: {smartResult.confidence}%</p>
-                  </div>
                 </div>
               )}
 
@@ -1011,54 +889,6 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
                 >
                   <span>👥 Multi-Object: Left + Right</span>
                   <span className="text-[10px] text-sky-700 font-mono font-bold">Stereo</span>
-                </button>
-              </div>
-            )}
-
-            {/* Presets: Indian Currency Mode */}
-            {visionMode === 'currency' && (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => triggerDemoCurrency(500)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹500 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Grey</span>
-                </button>
-                <button
-                  onClick={() => triggerDemoCurrency(200)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹200 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Orange</span>
-                </button>
-                <button
-                  onClick={() => triggerDemoCurrency(100)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹100 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Lavender</span>
-                </button>
-                <button
-                  onClick={() => triggerDemoCurrency(50)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹50 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Cyan</span>
-                </button>
-                <button
-                  onClick={() => triggerDemoCurrency(20)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹20 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Green</span>
-                </button>
-                <button
-                  onClick={() => triggerDemoCurrency(10)}
-                  className="py-2.5 px-3 rounded-xl bg-slate-50 hover:bg-emerald-50 border border-slate-200 text-left text-xs font-bold text-slate-900 hover:border-emerald-400 flex items-center justify-between shadow-xs transition-colors"
-                >
-                  <span>💵 ₹10 Note</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Brown</span>
                 </button>
               </div>
             )}

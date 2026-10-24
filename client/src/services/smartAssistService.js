@@ -1,4 +1,4 @@
-// Smart Assist Service: Indian Currency Reader, Text & Medicine OCR, Color Identifier, and Auto-Torch
+// Smart Assist Service: Text & Medicine OCR, Color Identifier, and Auto-Torch
 import { speechService } from './speechService';
 import { audioService } from './audioService';
 
@@ -6,7 +6,6 @@ class SmartAssistService {
   constructor() {
     this.torchActive = false;
     this.mediaStreamTrack = null;
-    this.lastCurrencyHeard = '';
     this.lastColorHeard = '';
     this.lastTextHeard = '';
   }
@@ -16,90 +15,7 @@ class SmartAssistService {
   }
 
   // ==========================================
-  // 1. INDIAN CURRENCY RECOGNITION (₹10 - ₹500)
-  // ==========================================
-  // Analyzes aspect ratio and dominant color profiles of Mahatma Gandhi New Series banknotes
-  recognizeCurrency(canvas) {
-    if (!canvas) return null;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const { width, height } = canvas;
-
-    // Sample across central 60% of the frame (where the note is held)
-    const startX = Math.round(width * 0.20);
-    const startY = Math.round(height * 0.20);
-    const sampleW = Math.round(width * 0.60);
-    const sampleH = Math.round(height * 0.60);
-
-    const imgData = ctx.getImageData(startX, startY, sampleW, sampleH).data;
-    let rSum = 0, gSum = 0, bSum = 0, totalValidPixels = 0;
-
-    for (let i = 0; i < imgData.length; i += 16) {
-      const pr = imgData[i];
-      const pg = imgData[i + 1];
-      const pb = imgData[i + 2];
-
-      // Filter out extreme shadows (pure dark < 25) or blown-out white glare (> 245)
-      const brightness = (pr + pg + pb) / 3;
-      if (brightness > 30 && brightness < 240) {
-        rSum += pr;
-        gSum += pg;
-        bSum += pb;
-        totalValidPixels++;
-      }
-    }
-
-    if (totalValidPixels < 50) return null;
-
-    const r = Math.round(rSum / totalValidPixels);
-    const g = Math.round(gSum / totalValidPixels);
-    const b = Math.round(bSum / totalValidPixels);
-
-    const [h, s, l] = this.rgbToHsl(r, g, b);
-
-    // Mahatma Gandhi New Series Banknote Signatures
-    // 1. ₹500: Stone Grey (Neutral with olive/greenish undertone)
-    if (s < 0.22 && l >= 0.35 && l <= 0.72 && Math.abs(r - g) < 22 && Math.abs(g - b) < 25) {
-      return { value: 500, label: '₹500 Note', hindi: 'पांच सौ रुपये का नोट', color: 'Stone Grey', confidence: 93 };
-    }
-    // 2. ₹200: Bright Orange-Yellow / Saffron (Warm golden orange)
-    if (h >= 25 && h <= 58 && s > 0.28 && r > b + 30 && r > 115) {
-      return { value: 200, label: '₹200 Note', hindi: 'दो सौ रुपये का नोट', color: 'Bright Yellow-Orange', confidence: 91 };
-    }
-    // 3. ₹100: Lavender / Light Purple (Violet hue, blue & red dominant over green)
-    if ((h >= 195 && h <= 290 && s > 0.12 && l > 0.30) || (b > 95 && b > g + 8 && r > g - 5)) {
-      return { value: 100, label: '₹100 Note', hindi: 'एक सौ रुपये का नोट', color: 'Lavender', confidence: 92 };
-    }
-    // 4. ₹50: Fluorescent Blue / Cyan (Cyan hue, Blue and Green dominant over Red)
-    if ((h >= 160 && h <= 215 && s > 0.20) || (b > r + 20 && g > r + 5)) {
-      return { value: 50, label: '₹50 Note', hindi: 'पचास रुपये का नोट', color: 'Fluorescent Blue', confidence: 90 };
-    }
-    // 5. ₹20: Greenish Yellow / Olive Green (Green dominant over Red & Blue)
-    if ((h >= 58 && h <= 125 && s > 0.18) || (g > r + 10 && g > b + 15)) {
-      return { value: 20, label: '₹20 Note', hindi: 'बीस रुपये का नोट', color: 'Greenish Yellow', confidence: 89 };
-    }
-    // 6. ₹10: Chocolate Brown (Dark terracotta brown, R > G > B, darker luminance)
-    if ((h >= 8 && h <= 35 && s > 0.20 && l < 0.48) || (r > g + 12 && g > b + 8 && r < 170)) {
-      return { value: 10, label: '₹10 Note', hindi: 'दस रुपये का नोट', color: 'Chocolate Brown', confidence: 88 };
-    }
-
-    return null;
-  }
-
-  // Pre-configured Currency Scenarios for Demo & Evaluation
-  getDemoCurrency(denomination) {
-    const map = {
-      500: { value: 500, label: '₹500 Note (Five Hundred Rupees)', hindi: 'पांच सौ रुपये का नोट', color: 'Stone Grey', confidence: 96, image: '₹500 Mahatma Gandhi New Series' },
-      200: { value: 200, label: '₹200 Note (Two Hundred Rupees)', hindi: 'दो सौ रुपये का नोट', color: 'Bright Orange', confidence: 94, image: '₹200 Sanchi Stupa Motifs' },
-      100: { value: 100, label: '₹100 Note (One Hundred Rupees)', hindi: 'एक सौ रुपये का नोट', color: 'Lavender', confidence: 95, image: '₹100 Rani Ki Vav' },
-      50: { value: 50, label: '₹50 Note (Fifty Rupees)', hindi: 'पचास रुपये का नोट', color: 'Fluorescent Blue', confidence: 93, image: '₹50 Hampi with Chariot' },
-      20: { value: 20, label: '₹20 Note (Twenty Rupees)', hindi: 'बीस रुपये का नोट', color: 'Greenish Yellow', confidence: 92, image: '₹20 Ellora Caves' },
-      10: { value: 10, label: '₹10 Note (Ten Rupees)', hindi: 'दस रुपये का नोट', color: 'Chocolate Brown', confidence: 91, image: '₹10 Sun Temple Konark' }
-    };
-    return map[denomination] || map[500];
-  }
-
-  // ==========================================
-  // 2. TEXT & MEDICINE OCR READER
+  // 1. TEXT & MEDICINE OCR READER
   // ==========================================
   // Reads printed medicine labels, expiry dates, dosage, and door signage
   getDemoMedicalOcr(sampleKey = 'paracetamol') {

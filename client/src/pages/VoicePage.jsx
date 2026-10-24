@@ -113,7 +113,7 @@ export default function VoicePage({ onBack, onExecuteCommand }) {
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           {[
             { cmd: "Vision", target: 'vision' },
-            { cmd: "Currency", target: 'vision' },
+            { cmd: "Describe Scene", target: 'vision' },
             { cmd: "Medicine", target: 'vision' },
             { cmd: "Color", target: 'vision' },
             { cmd: "Torch", target: 'vision' },

@@ -22,7 +22,7 @@ export default function VoiceAssistantBanner({
   };
 
   const commandList = [
-    { en: 'Currency / Note', hi: 'Paise kitne hain / Note batao', desc: 'Reads Indian banknotes (₹10 - ₹500)' },
+    { en: 'Describe Scene / AI', hi: 'Samne kya hai / Dekh kar batao', desc: 'AI describes scene, objects & surroundings' },
     { en: 'Medicine / OCR', hi: 'Dawai padho / Parchi check karo', desc: 'Reads medicine strip, dosage & expiry' },
     { en: 'Color / Clothes', hi: 'Rang batao / Kapda check karo', desc: 'Identifies clothing and object colors' },
     { en: 'Torch / Light', hi: 'Torch jalao / Batti band karo', desc: 'Controls hardware flashlight' },
