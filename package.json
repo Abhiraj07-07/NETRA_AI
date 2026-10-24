@@ -1,6 +1,6 @@
 {
   "name": "netra-ai",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "NETRA AI - AI-powered vision and safety companion for visually impaired people (SPIRIT 3.0 Buildathon 2026)",
   "scripts": {
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
