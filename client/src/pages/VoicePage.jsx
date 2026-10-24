@@ -112,6 +112,7 @@ export default function VoicePage({ onBack, onExecuteCommand }) {
         {/* Quick Command Chips */}
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           {[
+            { cmd: "Start Walking", target: 'vision' },
             { cmd: "Vision", target: 'vision' },
             { cmd: "Describe Scene", target: 'vision' },
             { cmd: "Medicine", target: 'vision' },

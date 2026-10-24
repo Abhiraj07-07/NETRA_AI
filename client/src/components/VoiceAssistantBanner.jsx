@@ -22,6 +22,7 @@ export default function VoiceAssistantBanner({
   };
 
   const commandList = [
+    { en: 'Start / Walk / Companion', hi: 'Start / Shuru karo / Chalo', desc: 'Starts walking companion & obstacle radar' },
     { en: 'Describe Scene / AI', hi: 'Samne kya hai / Dekh kar batao', desc: 'AI describes scene, objects & surroundings' },
     { en: 'Medicine / OCR', hi: 'Dawai padho / Parchi check karo', desc: 'Reads medicine strip, dosage & expiry' },
     { en: 'Color / Clothes', hi: 'Rang batao / Kapda check karo', desc: 'Identifies clothing and object colors' },
@@ -91,7 +92,7 @@ export default function VoiceAssistantBanner({
                       </>
                     ) : (
                       <span className="text-slate-400">
-                        {isListening ? 'Say: "Vision", "SOS", "SMS", "Location", "Home"...' : 'Voice is paused. Click to speak.'}
+                        {isListening ? 'Say: "Start", "Walk", "Samne kya hai", "Medicine", "SOS"...' : 'Voice is paused. Click or press V to speak.'}
                       </span>
                     )}
                   </div>

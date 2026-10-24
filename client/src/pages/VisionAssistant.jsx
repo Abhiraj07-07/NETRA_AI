@@ -37,6 +37,41 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   const animationFrameId = useRef(null);
   const visionModeRef = useRef(initialMode || 'obstacles');
   visionModeRef.current = visionMode;
+  const lastObstacleTimeRef = useRef(Date.now());
+  const lastClearAnnounceRef = useRef(0);
+
+  // Accessible bilingual obstacle & directional names
+  const OBSTACLE_NAMES_HI = {
+    person: 'व्यक्ति',
+    bicycle: 'साइकिल',
+    car: 'गाड़ी',
+    motorcycle: 'बाइक',
+    bus: 'बस',
+    truck: 'ट्रक',
+    bench: 'बेंच',
+    chair: 'कुर्सी',
+    couch: 'सोफा',
+    potted_plant: 'गमला / पौधा',
+    bed: 'बिस्तर',
+    dining_table: 'मेज़',
+    table: 'मेज़',
+    tv: 'टीवी',
+    laptop: 'लैपटॉप',
+    cell_phone: 'फोन',
+    book: 'किताब',
+    bottle: 'बोतल',
+    cup: 'कप',
+    door: 'दरवाज़ा',
+    stairs: 'सीढ़ियां',
+    wall: 'दीवार',
+    obstacle: 'रुकावट'
+  };
+
+  const ZONE_MAPPING = {
+    center: { en: 'directly ahead', hi: 'बिल्कुल सामने' },
+    left: { en: 'on your left', hi: 'बाईं तरफ' },
+    right: { en: 'on your right', hi: 'दाईं तरफ' }
+  };
 
   // React to prop change
   useEffect(() => {
@@ -59,8 +94,9 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
       } else if (intent === 'COLOR') {
         switchMode('color', true);
         setTimeout(handleManualScan, 300);
-      } else if (intent === 'VISION_RADAR') {
+      } else if (intent === 'VISION_RADAR' || intent === 'WALK_START' || intent === 'CAMERA_START') {
         switchMode('obstacles', false);
+        startCamera();
       } else if (intent === 'DESCRIBE_SCENE') {
         handleDescribeScene();
       } else if (intent === 'TORCH') {
@@ -230,12 +266,21 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
         if (mode === 'obstacles') {
           const results = await visionDetector.detect(video);
           if (results && results.length > 0) {
+            lastObstacleTimeRef.current = Date.now();
             setDetectedObjects(results);
             handleDetectionsFeedback(results);
             drawBoundingBoxes(results);
           } else {
             setDetectedObjects([]);
             clearCanvas();
+
+            // Safe Pathway Reassurance for visually impaired walker
+            const now = Date.now();
+            if (speechAnnounceEnabled && now - lastObstacleTimeRef.current > 7000 && now - lastClearAnnounceRef.current > 14000) {
+              lastClearAnnounceRef.current = now;
+              speechService.speak("रास्ता साफ़ है, सीधे चलते रहें। Pathway clear ahead.", { minIntervalMs: 12000 });
+              logAnnouncement("रास्ता साफ़ है (Pathway clear ahead)", "clear");
+            }
           }
           setTelemetry({
             latency: visionDetector.lastLatencyMs || 18,
@@ -353,19 +398,38 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     }
 
     if (speechAnnounceEnabled) {
+      const cleanLabel = primary.label.toLowerCase();
+      let hiLabel = 'रुकावट';
+      for (const [key, val] of Object.entries(OBSTACLE_NAMES_HI)) {
+        if (cleanLabel.includes(key)) {
+          hiLabel = val;
+          break;
+        }
+      }
+
+      const zoneObj = ZONE_MAPPING[primary.zone] || ZONE_MAPPING.center;
+      const isCritical = primary.distance <= 1.0 && primary.zone === 'center';
       let msg = '';
-      if (primary.label.includes('WALL')) {
-        if (primary.distance <= 1.0 && primary.zone === 'center') {
-          msg = `Stop! Wall directly ahead, ${primary.distance} meters. Pathway blocked.`;
+
+      if (isCritical) {
+        audioService.playTone(920, 0.3); // High alert earcon
+        if (primary.label.includes('WALL') || cleanLabel.includes('wall')) {
+          msg = `रुकिए! बिल्कुल सामने ${primary.distance} मीटर पर दीवार है! Stop, wall directly ahead!`;
         } else {
-          const zoneWord = primary.zone === 'center' ? 'ahead' : `on your ${primary.zone}`;
-          msg = `Caution: Wall ${zoneWord}, ${primary.distance} meters.`;
+          msg = `रुकिए! बिल्कुल सामने ${primary.distance} मीटर पर ${hiLabel} है! Stop, ${primary.label} ahead!`;
         }
       } else {
-        const zoneWord = primary.zone === 'center' ? 'ahead' : `on your ${primary.zone}`;
-        msg = `Caution: ${primary.label} ${zoneWord}, ${primary.distance} meters.`;
+        if (primary.label.includes('WALL') || cleanLabel.includes('wall')) {
+          msg = `सावधान: ${zoneObj.hi} ${primary.distance} मीटर पर दीवार है। (Wall ${zoneObj.en}).`;
+        } else {
+          msg = `सावधान: ${zoneObj.hi} ${primary.distance} मीटर पर ${hiLabel} है। (${primary.label} ${zoneObj.en}).`;
+        }
       }
-      speechService.speak(msg, { minIntervalMs: 2500 });
+
+      speechService.speak(msg, { 
+        priority: isCritical, 
+        minIntervalMs: isCritical ? 1200 : 2500 
+      });
       logAnnouncement(msg, primary.zone);
     }
   };

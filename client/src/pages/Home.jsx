@@ -40,6 +40,42 @@ export default function Home({ onSelectPage, activeSOSCount, locationSharingActi
         </div>
       </div>
 
+      {/* Primary Accessible One-Touch Voice & Walk Starter Button */}
+      <button
+        onClick={() => {
+          speechService.startListening();
+          speechService.speak("Starting NETRA walking guide. Camera and obstacle radar active.", { priority: true });
+          onSelectPage('vision');
+        }}
+        className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-600 text-white rounded-3xl p-6 shadow-xl border-2 border-emerald-400 flex flex-col sm:flex-row items-center justify-between gap-4 transition-all hover:scale-[1.01] active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-emerald-400"
+        aria-label="Start Walking Guide and Obstacle Radar Now. Or speak Start"
+      >
+        <div className="flex items-center gap-4 text-left">
+          <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
+            <Mic className="w-8 h-8 text-white animate-pulse" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <span className="text-[11px] font-black uppercase tracking-wider bg-white/25 px-2.5 py-0.5 rounded-full text-white">
+                One-Touch Walking Guide
+              </span>
+              <span className="text-[11px] font-mono font-bold bg-amber-400 text-slate-950 px-2 py-0.5 rounded-md">
+                VOICE: SAY "START" OR "WALK"
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white">
+              Start Walking Companion & Obstacle Radar 🚶
+            </h2>
+            <p className="text-xs sm:text-sm text-emerald-100 font-medium mt-0.5">
+              टैप करें या 'Start' बोलें — कैमरा रास्ते की सभी रुकावटें देखकर तुरंत आवाज़ में बताएगा
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-emerald-900 font-black text-sm shadow-md shrink-0">
+          <span>START NOW ⚡</span>
+        </div>
+      </button>
+
       {/* Main Grid of Accessible Action Tiles - Frosted glass translucent styling */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-left">
         {/* Tile 1: Vision Assistant & Smart Assist Suite */}

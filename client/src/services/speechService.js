@@ -226,16 +226,18 @@ class SpeechService {
       };
     }
 
-    // 6. AI SCENE & OBJECT DESCRIBE ("Samne kya hai", "Batao kya hai", "Describe scene", "What is in front")
+    // 6. AI SCENE & OBJECT DESCRIBE ("Samne kya hai", "Analysis", "Describe scene", "What is in front")
     if (
       text.includes('samne kya') || text.includes('kya hai') || text.includes('describe') || 
       text.includes('kya dikh') || text.includes('batao kya') || text.includes('dekho kya') ||
       text.includes('what is in front') || text.includes('what do you see') || text.includes('objects') ||
-      text.includes('सामने क्या') || text.includes('क्या है') || text.includes('बताओ क्या') || text.includes('देखो क्या')
+      text.includes('analysis') || text.includes('analyse') || text.includes('analyze') ||
+      text.includes('सामने क्या') || text.includes('क्या है') || text.includes('बताओ क्या') || text.includes('देखो क्या') ||
+      text.includes('विश्लेषण')
     ) {
       return {
         intent: 'DESCRIBE_SCENE',
-        speech: "Analyzing scene and objects in front.",
+        speech: "Analyzing scene and obstacles in front of you.",
         feedback: "Action: Describing Objects in Scene"
       };
     }
@@ -412,21 +414,31 @@ class SpeechService {
       };
     }
 
-    // 18. GENERAL START / ON
-    if (text === 'start' || text === 'chalu' || text === 'on' || text === 'shuru' || text === 'शुरू' || text === 'चालू') {
+    // 18. STOP / PAUSE
+    if (
+      text.includes('stop') || text.includes('band') || text.includes('pause') || 
+      text.includes('ruk') || text.includes('ruko') || text.includes('बंद') || text.includes('रुको')
+    ) {
       return {
-        intent: 'CAMERA_START',
-        speech: "Starting camera and obstacle scanning.",
-        feedback: "Action: Started Camera"
+        intent: 'CAMERA_STOP',
+        speech: "Camera stopped. Walking guidance paused.",
+        feedback: "Action: Stopped Walking Guidance"
       };
     }
 
-    // 19. GENERAL STOP / OFF
-    if (text === 'stop' || text === 'band' || text === 'pause' || text === 'ruk' || text === 'ruko' || text === 'बंद' || text === 'रुको') {
+    // 19. START / WALK / TALK WALK / SOFTWARE START / NAVIGATION
+    if (
+      text.includes('start') || text.includes('walk') || text.includes('talk walk') || 
+      text.includes('chalu') || text.includes('shuru') || text.includes('chalna') || 
+      text.includes('chal') || text.includes('software') || text.includes('guide') ||
+      text.includes('navigation') || text.includes('aage') ||
+      text.includes('शुरू') || text.includes('चालू') || text.includes('चलो') || 
+      text.includes('चलना') || text.includes('स्टार्ट')
+    ) {
       return {
-        intent: 'CAMERA_STOP',
-        speech: "Camera and scanner stopped.",
-        feedback: "Action: Stopped Camera"
+        intent: 'WALK_START',
+        speech: "NETRA walking guide active. Camera and obstacle radar started. Walk forward safely, I will alert you to all obstacles in your path.",
+        feedback: "Action: Started Walking Guide & Obstacle Radar"
       };
     }
 

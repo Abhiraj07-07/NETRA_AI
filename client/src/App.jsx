@@ -59,11 +59,12 @@ export default function App() {
         speechService.speak(speech, { priority: true });
         break;
 
+      case 'WALK_START':
       case 'VISION_RADAR':
       case 'CAMERA_START':
         setVisionMode('obstacles');
         setCurrentPage('vision');
-        speechService.speak(speech, { priority: true });
+        speechService.speak(speech || "NETRA walking guide active. Camera and obstacle radar started. Walk forward safely.", { priority: true });
         break;
 
       case 'VOICE_PAGE':
