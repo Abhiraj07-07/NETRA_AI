@@ -192,6 +192,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
           isStreamingRef.current = true;
           setIsStreaming(true);
           setAiStatus('Active & Scanning Pathway');
+          speechService.speak("Camera active. Point at any obstacle or person.", { priority: true });
           // Start vision detection loop immediately without delay
           startVisionLoop();
           // Load deep neural network weights in background

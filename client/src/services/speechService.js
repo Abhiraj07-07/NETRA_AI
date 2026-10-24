@@ -17,6 +17,17 @@ class SpeechService {
     this.stateListeners = new Set();
     this.shouldKeepListening = false;
     this.audioCtx = null;
+    this.activeUtterances = new Set();
+    this.voices = [];
+
+    if (this.synth) {
+      this.voices = this.synth.getVoices ? this.synth.getVoices() : [];
+      if (typeof window !== 'undefined') {
+        this.synth.onvoiceschanged = () => {
+          this.voices = this.synth.getVoices();
+        };
+      }
+    }
   }
 
   setRate(r) {
@@ -118,29 +129,59 @@ class SpeechService {
   }
 
   // ==============================================================
-  // SPEECH SYNTHESIS (TTS)
+  // SPEECH SYNTHESIS (TTS) - Chrome Deadlock Free & Throttle Safe
   // ==============================================================
-  speak(text, { priority = false, minIntervalMs = 1500, lang = 'en-IN' } = {}) {
-    if (this.isMuted || !this.synth) return;
+  speak(text, { priority = false, minIntervalMs = 2500, lang = 'en-IN' } = {}) {
+    if (this.isMuted || !this.synth || !text) return;
 
     const now = Date.now();
-    if (!priority && text === this.lastSpokenText && now - this.lastSpokenTime < minIntervalMs) {
-      return;
+
+    // Throttle check: Prevent 45 FPS flooding. If not priority, do NOT speak if minIntervalMs hasn't passed OR if synth is already speaking!
+    if (!priority) {
+      if (now - this.lastSpokenTime < minIntervalMs) {
+        return;
+      }
+      if (this.synth.speaking) {
+        return;
+      }
     }
 
     try {
+      // Chrome deadlock recovery
+      if (this.synth.paused) {
+        this.synth.resume();
+      }
+
+      // Priority alert cancels existing speech immediately
       if (priority) {
         this.synth.cancel();
       }
 
       const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = this.rate;
-      utterance.pitch = this.pitch;
-      utterance.lang = lang;
+      utterance.rate = this.rate || 1.0;
+      utterance.pitch = this.pitch || 1.0;
+      utterance.lang = lang || this.currentLanguage;
 
-      const voices = this.synth.getVoices ? this.synth.getVoices() : [];
+      // Keep utterance in Set to prevent Chrome V8 GC bug
+      if (!this.activeUtterances) {
+        this.activeUtterances = new Set();
+      }
+      this.activeUtterances.add(utterance);
+
+      utterance.onend = () => {
+        this.activeUtterances.delete(utterance);
+      };
+      utterance.onerror = (e) => {
+        this.activeUtterances.delete(utterance);
+        console.warn('TTS utterance notice:', e);
+      };
+
+      const voices = (this.voices && this.voices.length > 0) 
+        ? this.voices 
+        : (this.synth.getVoices ? this.synth.getVoices() : []);
+      
       const naturalVoice = voices.find(v => 
-        (v.lang.startsWith('en-IN') || v.lang.startsWith('hi') || v.lang.startsWith('en')) &&
+        (v.lang.startsWith('hi') || v.lang.startsWith('en-IN') || v.lang.startsWith('en')) &&
         (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('India'))
       ) || voices.find(v => v.lang.startsWith('en'));
 
@@ -151,7 +192,22 @@ class SpeechService {
       this.lastSpokenText = text;
       this.lastSpokenTime = now;
 
-      this.synth.speak(utterance);
+      console.log('[TTS Speaking]:', text);
+
+      if (priority) {
+        setTimeout(() => {
+          try {
+            if (this.synth) {
+              if (this.synth.paused) this.synth.resume();
+              this.synth.speak(utterance);
+            }
+          } catch (e) {
+            console.warn('Priority speak error:', e);
+          }
+        }, 30);
+      } else {
+        this.synth.speak(utterance);
+      }
     } catch (err) {
       console.warn('Speech synthesis error:', err);
     }
