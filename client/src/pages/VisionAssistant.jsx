@@ -105,7 +105,7 @@ export default function VisionAssistant({ onBack }) {
           smartAssistService.setMediaStreamTrack(videoTrack);
         }
 
-        speechService.speak("Camera active. Real-time obstacle detection started.", { minIntervalMs: 3000 });
+        speechService.speak("Camera and obstacle detection started. Scan shuru ho gaya hai.", { priority: true });
       }
     } catch (err) {
       console.warn('Camera access fallback or error:', err);
@@ -129,7 +129,7 @@ export default function VisionAssistant({ onBack }) {
     setDetectedObjects([]);
     setNearestObstacle(null);
     setAiStatus('Camera Paused');
-    speechService.speak("Camera paused.", { priority: true });
+    speechService.speak("Camera and obstacle detection stopped. Scan rok diya gaya hai.", { priority: true });
   }, []);
 
   // Flip Camera between Environment and User
@@ -420,18 +420,28 @@ export default function VisionAssistant({ onBack }) {
             <RefreshCw className="w-4 h-4" />
           </button>
 
-          {/* Camera On / Off */}
+          {/* Big Prominent START / STOP CAMERA Button */}
           <button
             onClick={isStreaming ? stopCamera : () => startCamera()}
-            className={`p-2.5 rounded-xl border font-bold transition-colors ${
+            className={`px-4 py-2 rounded-xl text-xs font-black border transition-all flex items-center gap-1.5 shadow-md active:scale-95 ${
               isStreaming 
-                ? 'bg-rose-50 text-rose-700 border-rose-300 hover:bg-rose-100' 
-                : 'bg-emerald-50 text-emerald-800 border-emerald-400 hover:bg-emerald-100'
+                ? 'bg-rose-600 hover:bg-rose-700 text-white border-rose-700 shadow-rose-600/30' 
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 shadow-emerald-600/30'
             }`}
-            title="Start or pause camera [Spacebar]"
-            aria-label={isStreaming ? "Pause Camera" : "Start Camera"}
+            title="Start or Stop Camera Obstacle Scanner [Spacebar]"
+            aria-label={isStreaming ? "Stop Camera" : "Start Camera"}
           >
-            {isStreaming ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+            {isStreaming ? (
+              <>
+                <CameraOff className="w-4 h-4 fill-current animate-pulse" />
+                <span>STOP (रोकें)</span>
+              </>
+            ) : (
+              <>
+                <Camera className="w-4 h-4 fill-current" />
+                <span>START (शुरू करें)</span>
+              </>
+            )}
           </button>
         </div>
       </div>
