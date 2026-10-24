@@ -24,58 +24,65 @@ class SmartAssistService {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const { width, height } = canvas;
 
-    // Sample central 50% region of the frame
-    const startX = Math.round(width * 0.25);
-    const startY = Math.round(height * 0.25);
-    const sampleW = Math.round(width * 0.5);
-    const sampleH = Math.round(height * 0.5);
+    // Sample across central 60% of the frame (where the note is held)
+    const startX = Math.round(width * 0.20);
+    const startY = Math.round(height * 0.20);
+    const sampleW = Math.round(width * 0.60);
+    const sampleH = Math.round(height * 0.60);
 
     const imgData = ctx.getImageData(startX, startY, sampleW, sampleH).data;
-    let rSum = 0, gSum = 0, bSum = 0, totalPixels = 0;
+    let rSum = 0, gSum = 0, bSum = 0, totalValidPixels = 0;
 
     for (let i = 0; i < imgData.length; i += 16) {
-      rSum += imgData[i];
-      gSum += imgData[i + 1];
-      bSum += imgData[i + 2];
-      totalPixels++;
+      const pr = imgData[i];
+      const pg = imgData[i + 1];
+      const pb = imgData[i + 2];
+
+      // Filter out extreme shadows (pure dark < 25) or blown-out white glare (> 245)
+      const brightness = (pr + pg + pb) / 3;
+      if (brightness > 30 && brightness < 240) {
+        rSum += pr;
+        gSum += pg;
+        bSum += pb;
+        totalValidPixels++;
+      }
     }
 
-    const r = Math.round(rSum / totalPixels);
-    const g = Math.round(gSum / totalPixels);
-    const b = Math.round(bSum / totalPixels);
+    if (totalValidPixels < 50) return null;
 
-    // Convert to HSL
+    const r = Math.round(rSum / totalValidPixels);
+    const g = Math.round(gSum / totalValidPixels);
+    const b = Math.round(bSum / totalValidPixels);
+
     const [h, s, l] = this.rgbToHsl(r, g, b);
 
-    // Color Signature Matching for New Indian Banknotes
-    let note = null;
-
-    // ₹500: Stone Grey (Hue ~30-70, low saturation 10-30%, medium luminance)
-    if (s < 0.25 && l > 0.40 && l < 0.70 && r > 110 && g > 110 && b > 100) {
-      note = { value: 500, label: '₹500 Note', hindi: 'पांच सौ रुपये का नोट', color: 'Stone Grey', confidence: 91 };
+    // Mahatma Gandhi New Series Banknote Signatures
+    // 1. ₹500: Stone Grey (Neutral with olive/greenish undertone)
+    if (s < 0.22 && l >= 0.35 && l <= 0.72 && Math.abs(r - g) < 22 && Math.abs(g - b) < 25) {
+      return { value: 500, label: '₹500 Note', hindi: 'पांच सौ रुपये का नोट', color: 'Stone Grey', confidence: 93 };
     }
-    // ₹200: Bright Orange-Yellow (Hue 35-55, high saturation > 40%, high luminance)
-    else if (h >= 35 && h <= 55 && s > 0.35 && l > 0.40) {
-      note = { value: 200, label: '₹200 Note', hindi: 'दो सौ रुपये का नोट', color: 'Bright Yellow-Orange', confidence: 89 };
+    // 2. ₹200: Bright Orange-Yellow / Saffron (Warm golden orange)
+    if (h >= 25 && h <= 58 && s > 0.28 && r > b + 30 && r > 115) {
+      return { value: 200, label: '₹200 Note', hindi: 'दो सौ रुपये का नोट', color: 'Bright Yellow-Orange', confidence: 91 };
     }
-    // ₹100: Lavender / Light Purple-Blue (Hue 220-270, saturation 15-45%)
-    else if (h >= 220 && h <= 270 && s > 0.15 && l > 0.35) {
-      note = { value: 100, label: '₹100 Note', hindi: 'एक सौ रुपये का नोट', color: 'Lavender', confidence: 93 };
+    // 3. ₹100: Lavender / Light Purple (Violet hue, blue & red dominant over green)
+    if ((h >= 195 && h <= 290 && s > 0.12 && l > 0.30) || (b > 95 && b > g + 8 && r > g - 5)) {
+      return { value: 100, label: '₹100 Note', hindi: 'एक सौ रुपये का नोट', color: 'Lavender', confidence: 92 };
     }
-    // ₹50: Fluorescent Blue / Cyan (Hue 170-210, saturation > 25%)
-    else if (h >= 170 && h < 210 && s > 0.25 && b > r) {
-      note = { value: 50, label: '₹50 Note', hindi: 'पचास रुपये का नोट', color: 'Fluorescent Blue', confidence: 90 };
+    // 4. ₹50: Fluorescent Blue / Cyan (Cyan hue, Blue and Green dominant over Red)
+    if ((h >= 160 && h <= 215 && s > 0.20) || (b > r + 20 && g > r + 5)) {
+      return { value: 50, label: '₹50 Note', hindi: 'पचास रुपये का नोट', color: 'Fluorescent Blue', confidence: 90 };
     }
-    // ₹20: Greenish Yellow (Hue 65-110, saturation > 25%)
-    else if (h >= 65 && h <= 110 && s > 0.20 && g > b) {
-      note = { value: 20, label: '₹20 Note', hindi: 'बीस रुपये का नोट', color: 'Greenish Yellow', confidence: 88 };
+    // 5. ₹20: Greenish Yellow / Olive Green (Green dominant over Red & Blue)
+    if ((h >= 58 && h <= 125 && s > 0.18) || (g > r + 10 && g > b + 15)) {
+      return { value: 20, label: '₹20 Note', hindi: 'बीस रुपये का नोट', color: 'Greenish Yellow', confidence: 89 };
     }
-    // ₹10: Chocolate Brown (Hue 15-30, saturation 25-50%, lower luminance)
-    else if (h >= 10 && h <= 32 && s > 0.25 && l < 0.45 && r > g) {
-      note = { value: 10, label: '₹10 Note', hindi: 'दस रुपये का नोट', color: 'Chocolate Brown', confidence: 87 };
+    // 6. ₹10: Chocolate Brown (Dark terracotta brown, R > G > B, darker luminance)
+    if ((h >= 8 && h <= 35 && s > 0.20 && l < 0.48) || (r > g + 12 && g > b + 8 && r < 170)) {
+      return { value: 10, label: '₹10 Note', hindi: 'दस रुपये का नोट', color: 'Chocolate Brown', confidence: 88 };
     }
 
-    return note;
+    return null;
   }
 
   // Pre-configured Currency Scenarios for Demo & Evaluation
@@ -98,169 +105,156 @@ class SmartAssistService {
   getDemoMedicalOcr(sampleKey = 'paracetamol') {
     const samples = {
       paracetamol: {
-        title: 'Paracetamol Tablets IP 500mg',
-        dosage: '1 tablet every 6 hours after food for fever and pain',
+        title: 'Paracetamol Tablets IP 650mg',
+        dosage: 'Take 1 tablet every 6 hours after meals with water',
         expiry: 'EXP: 12/2027 (Safe to use)',
-        manufacturer: 'Cipla Health Care',
-        category: 'Pain Relief & Antipyretic',
-        caution: 'Do not exceed 4 tablets in 24 hours'
+        caution: 'Do not exceed 4 tablets in 24 hours. Keep out of reach of children.',
+        batch: 'B.No. PCT-9941',
+        manufacturer: 'Cipla Health Care Ltd.'
+      },
+      amoxicillin: {
+        title: 'Amoxicillin Trihydrate 500mg Capsules',
+        dosage: 'Antibiotic - 1 capsule twice daily for 5 days',
+        expiry: 'EXP: 08/2026 (Safe to use)',
+        caution: 'Complete full prescribed course. Prescription medicine.',
+        batch: 'B.No. AMX-3312',
+        manufacturer: 'Sun Pharma Ltd.'
       },
       cetirizine: {
         title: 'Cetirizine Hydrochloride 10mg',
-        dosage: '1 tablet at bedtime for allergy relief',
-        expiry: 'EXP: 08/2026 (Safe to use)',
-        manufacturer: 'Sun Pharma',
-        category: 'Antihistamine / Anti-Allergy',
-        caution: 'May cause drowsiness'
+        dosage: 'Anti-allergic - 1 tablet at night before bed',
+        expiry: 'EXP: 04/2028 (Safe to use)',
+        caution: 'May cause mild drowsiness. Avoid driving.',
+        batch: 'B.No. CTZ-7710',
+        manufacturer: 'Dr. Reddy Labs'
       },
-      eye_drops: {
-        title: 'Refresh Tears Lubricant Eye Drops 10ml',
-        dosage: '1 to 2 drops in affected eye as needed',
-        expiry: 'EXP: 04/2027',
-        manufacturer: 'Allergan India',
-        category: 'Ophthalmic Eye Care',
-        caution: 'Discard 1 month after opening'
-      },
-      room_sign: {
-        title: 'Doctor Cabin Room No. 104',
-        dosage: 'Dr. S. K. Verma, Chief Medical Officer',
-        expiry: 'Consulting Hours: 10 AM - 4 PM',
-        manufacturer: 'DSMNRU Campus Health Center',
-        category: 'Hospital Wayfinding Sign',
-        caution: 'Please knock and wait for bell'
+      doorsign: {
+        title: 'Room 204 - Computer Science & AI Lab',
+        dosage: 'Tactile Braille plate located on door frame right side',
+        expiry: 'Office Hours: 09:00 AM - 05:00 PM',
+        caution: 'Push door gently inward.',
+        batch: 'Academic Block B',
+        manufacturer: 'DSMNRU Campus Facilities'
       }
     };
     return samples[sampleKey] || samples.paracetamol;
   }
 
   // ==========================================
-  // 3. COLOR IDENTIFIER
+  // 3. COLOR IDENTIFIER (Clothes, Objects)
   // ==========================================
-  // Analyzes center crosshair pixels and matches to human named color
   identifyColor(canvas) {
     if (!canvas) return null;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const { width, height } = canvas;
 
-    const centerX = Math.round(width / 2);
-    const centerY = Math.round(height / 2);
-    const radius = 25; // 50px diameter circle in center
+    // Sample central 30x30 pixels (reticle center)
+    const cx = Math.round(width / 2) - 15;
+    const cy = Math.round(height / 2) - 15;
+    const imgData = ctx.getImageData(cx, cy, 30, 30).data;
 
-    const imgData = ctx.getImageData(centerX - radius, centerY - radius, radius * 2, radius * 2).data;
-    let rSum = 0, gSum = 0, bSum = 0, count = 0;
-
+    let r = 0, g = 0, b = 0, count = 0;
     for (let i = 0; i < imgData.length; i += 4) {
-      rSum += imgData[i];
-      gSum += imgData[i + 1];
-      bSum += imgData[i + 2];
+      r += imgData[i];
+      g += imgData[i + 1];
+      b += imgData[i + 2];
       count++;
     }
 
-    const r = Math.round(rSum / count);
-    const g = Math.round(gSum / count);
-    const b = Math.round(bSum / count);
+    r = Math.round(r / count);
+    g = Math.round(g / count);
+    b = Math.round(b / count);
 
-    return this.nameRgbColor(r, g, b);
-  }
-
-  nameRgbColor(r, g, b) {
     const [h, s, l] = this.rgbToHsl(r, g, b);
-
-    let name = 'Grey';
-    let hindi = 'स्लेटी (Grey)';
-
-    // Grayscale check
-    if (l < 0.15) {
-      name = 'Black';
-      hindi = 'काला (Black)';
-    } else if (l > 0.85 && s < 0.15) {
-      name = 'White';
-      hindi = 'सफ़ेद (White)';
-    } else if (s < 0.15) {
-      name = l > 0.5 ? 'Light Grey' : 'Dark Grey';
-      hindi = 'ग्रे (Grey)';
-    } else {
-      // Color by hue
-      if (h < 15 || h >= 345) {
-        name = l < 0.4 ? 'Dark Maroon' : 'Red';
-        hindi = 'लाल (Red)';
-      } else if (h >= 15 && h < 45) {
-        name = l < 0.4 ? 'Brown' : 'Orange';
-        hindi = l < 0.4 ? 'भूरा (Brown)' : 'नारंगी (Orange)';
-      } else if (h >= 45 && h < 70) {
-        name = 'Yellow';
-        hindi = 'पीला (Yellow)';
-      } else if (h >= 70 && h < 160) {
-        name = l < 0.4 ? 'Dark Green' : 'Green';
-        hindi = 'हरा (Green)';
-      } else if (h >= 160 && h < 200) {
-        name = 'Cyan / Aqua';
-        hindi = 'फ़िरोज़ी (Cyan)';
-      } else if (h >= 200 && h < 260) {
-        name = l < 0.4 ? 'Navy Blue' : 'Sky Blue';
-        hindi = 'नीला (Blue)';
-      } else if (h >= 260 && h < 315) {
-        name = 'Purple / Violet';
-        hindi = 'बैंगनी (Purple)';
-      } else if (h >= 315 && h < 345) {
-        name = 'Pink / Magenta';
-        hindi = 'गुलाबी (Pink)';
-      }
-    }
+    const colorName = this.classifyColorName(h, s, l, r, g, b);
+    const hex = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 
     return {
-      name,
-      hindi,
-      rgb: `rgb(${r}, ${g}, ${b})`,
-      hex: `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`,
-      brightness: Math.round(l * 100)
+      name: colorName.name,
+      category: colorName.category,
+      hex,
+      r, g, b
     };
   }
 
-  // ==========================================
-  // 4. AUTO-TORCH / NIGHT VISION SENSING
-  // ==========================================
-  // Calculates average luminance of current video frame
-  checkAmbientLuminance(canvas) {
-    if (!canvas) return 100;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    // Quick low-res 60x45 grid
-    const imgData = ctx.getImageData(0, 0, Math.min(canvas.width, 100), Math.min(canvas.height, 100)).data;
-    let totalLuma = 0;
-    let count = 0;
+  classifyColorName(h, s, l, r, g, b) {
+    if (l < 0.15) return { name: 'Black (काली)', category: 'Dark' };
+    if (l > 0.88 && s < 0.20) return { name: 'White (सफ़ेद)', category: 'Light' };
+    if (s < 0.15) return { name: 'Grey (धूसर)', category: 'Neutral' };
 
-    for (let i = 0; i < imgData.length; i += 16) {
-      // Y = 0.299R + 0.587G + 0.114B
-      const luma = 0.299 * imgData[i] + 0.587 * imgData[i + 1] + 0.114 * imgData[i + 2];
-      totalLuma += luma;
-      count++;
-    }
+    if (h < 15 || h >= 345) return { name: 'Red (लाल)', category: 'Primary Warm' };
+    if (h >= 15 && h < 45) return { name: 'Orange / Saffron (नारंगी)', category: 'Warm' };
+    if (h >= 45 && h < 70) return { name: 'Yellow (पीला)', category: 'Bright Warm' };
+    if (h >= 70 && h < 165) return { name: 'Green (हरा)', category: 'Cool Natural' };
+    if (h >= 165 && h < 200) return { name: 'Cyan / Sky Blue (आसमानी)', category: 'Cool' };
+    if (h >= 200 && h < 260) return { name: 'Blue / Navy (नीला)', category: 'Cool' };
+    if (h >= 260 && h < 315) return { name: 'Purple / Violet (बैंगनी)', category: 'Rich' };
+    if (h >= 315 && h < 345) return { name: 'Pink / Magenta (गुलाबी)', category: 'Bright' };
 
-    const avgLuma = count > 0 ? Math.round(totalLuma / count) : 100;
-    return avgLuma; // 0 (pure dark) to 255 (blinding bright)
+    return { name: 'Neutral Tone', category: 'General' };
   }
 
-  async setTorch(enable) {
-    this.torchActive = enable;
-    if (this.mediaStreamTrack && typeof this.mediaStreamTrack.applyConstraints === 'function') {
-      try {
-        const capabilities = this.mediaStreamTrack.getCapabilities ? this.mediaStreamTrack.getCapabilities() : {};
-        if (capabilities.torch) {
-          await this.mediaStreamTrack.applyConstraints({
-            advanced: [{ torch: enable }]
-          });
-          audioService.playTone(enable ? 880 : 440, 0.15);
-          speechService.speak(enable ? "Flashlight turned on." : "Flashlight turned off.");
-          return true;
-        }
-      } catch (e) {
-        console.warn('Torch constraint error:', e);
+  // ==========================================
+  // 4. HARDWARE TORCH / FLASHLIGHT CONTROL
+  // ==========================================
+  async setTorch(turnOn) {
+    if (!this.mediaStreamTrack) {
+      console.warn('No active camera video track available for torch.');
+      return false;
+    }
+
+    try {
+      const capabilities = this.mediaStreamTrack.getCapabilities ? this.mediaStreamTrack.getCapabilities() : {};
+      if (capabilities.torch) {
+        await this.mediaStreamTrack.applyConstraints({
+          advanced: [{ torch: turnOn }]
+        });
+        this.torchActive = turnOn;
+        return true;
+      } else {
+        console.warn('Device hardware flashlight not supported on this track.');
+        return false;
+      }
+    } catch (err) {
+      console.warn('Failed to toggle device torch:', err);
+      return false;
+    }
+  }
+
+  // ==========================================
+  // 5. AUTO-TORCH LOW-LIGHT DETECTOR
+  // ==========================================
+  // Calculates average luminosity of current video frame
+  checkLowLightAndAutoTorch(canvas, threshold = 40) {
+    if (!canvas || !this.mediaStreamTrack) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const { width, height } = canvas;
+
+    // Sample sparse grid of 100 points
+    const stepX = Math.floor(width / 10);
+    const stepY = Math.floor(height / 10);
+    let totalLuminance = 0, samples = 0;
+
+    for (let x = stepX; x < width; x += stepX) {
+      for (let y = stepY; y < height; y += stepY) {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        // Standard perceived luminance formula (ITU-R BT.709)
+        const lum = 0.2126 * pixel[0] + 0.7152 * pixel[1] + 0.0722 * pixel[2];
+        totalLuminance += lum;
+        samples++;
       }
     }
-    // Simulation fallback
-    audioService.playTone(enable ? 880 : 440, 0.15);
-    speechService.speak(enable ? "Night torch enabled." : "Night torch turned off.");
-    return false;
+
+    const avgLuminance = Math.round(totalLuminance / samples);
+
+    if (avgLuminance < threshold && !this.torchActive) {
+      this.setTorch(true);
+      speechService.speak("Low light environment detected. Hardware torch auto-activated.");
+    } else if (avgLuminance > threshold + 25 && this.torchActive) {
+      // Light restored, auto-shutoff
+      this.setTorch(false);
+      speechService.speak("Adequate ambient light restored. Torch auto-off.");
+    }
   }
 
   // Helper RGB to HSL conversion
@@ -270,7 +264,7 @@ class SmartAssistService {
     let h, s, l = (max + min) / 2;
 
     if (max === min) {
-      h = s = 0; // achromatic
+      h = s = 0;
     } else {
       const d = max - min;
       s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -279,9 +273,9 @@ class SmartAssistService {
         case g: h = (b - r) / d + 2; break;
         case b: h = (r - g) / d + 4; break;
       }
-      h = Math.round(h * 60);
+      h /= 6;
     }
-    return [h, s, l];
+    return [Math.round(h * 360), s, l];
   }
 }
 

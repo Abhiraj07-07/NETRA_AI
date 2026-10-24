@@ -279,29 +279,63 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   };
 
   // Manual Scan Trigger for Currency, Medicine OCR, or Color
-  const handleManualScan = () => {
+  const handleManualScan = async () => {
+    // 1. Immediately grab the fresh live video frame into canvas
+    copyVideoToCanvas();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
     setIsAnalyzing(true);
     audioService.playSpatialPing(0, 1.0);
-    const canvas = canvasRef.current;
     const mode = visionModeRef.current;
 
-    setTimeout(() => {
-      setIsAnalyzing(false);
-
+    try {
       if (mode === 'currency') {
-        const detected = smartAssistService.recognizeCurrency(canvas);
-        if (detected) {
-          setSmartResult(detected);
-          const msg = `Recognized ${detected.label}. ${detected.hindi}.`;
+        let recognizedNote = null;
+
+        // Try Gemini Vision API first if key is present
+        if (aiVisionService.hasApiKey()) {
+          setAiStatus('AI reading currency note...');
+          const base64 = aiVisionService.getCanvasBase64(canvas);
+          if (base64) {
+            try {
+              const geminiText = await aiVisionService.describeCurrencyWithGemini(base64);
+              if (geminiText && !geminiText.includes('कृपया नोट')) {
+                recognizedNote = {
+                  value: '₹',
+                  label: 'AI Banknote Identifier',
+                  hindi: geminiText,
+                  color: 'Gemini Multimodal AI',
+                  confidence: 99
+                };
+              }
+            } catch (geminiErr) {
+              console.warn('Gemini currency recognition fallback to local:', geminiErr);
+            }
+          }
+        }
+
+        // Offline / Built-in color signature matching
+        if (!recognizedNote) {
+          recognizedNote = smartAssistService.recognizeCurrency(canvas);
+        }
+
+        if (recognizedNote) {
+          setSmartResult(recognizedNote);
+          const msg = recognizedNote.hindi ? `पहचाना गया: ${recognizedNote.hindi}` : `Recognized ${recognizedNote.label}. ${recognizedNote.hindi}.`;
           speechService.speak(msg, { priority: true });
           logAnnouncement(msg, 'currency');
         } else {
-          // If no physical note in front of web camera, provide graceful guided prompt
-          const fallback = smartAssistService.getDemoCurrency(500);
-          setSmartResult(fallback);
-          const msg = `Identified: ${fallback.label}. Color: ${fallback.color}. Confidence ${fallback.confidence} percent.`;
-          speechService.speak(msg, { priority: true });
-          logAnnouncement(msg, 'currency');
+          const promptMsg = "नोट स्पष्ट नहीं दिख रहा है। कृपया नोट को सीधा करके कैमरे के थोड़ा पास लाएं।";
+          speechService.speak(promptMsg, { priority: true });
+          setSmartResult({
+            value: '?',
+            label: 'Note Not Detected',
+            hindi: 'कृपया नोट को कैमरे के सामने सीधा लाएं',
+            color: 'Align Note in Center',
+            confidence: 0
+          });
+          logAnnouncement("Currency scan: Note not aligned", 'currency');
         }
       } else if (mode === 'ocr') {
         const ocrData = smartAssistService.getDemoMedicalOcr('paracetamol');
@@ -318,7 +352,12 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
           logAnnouncement(msg, 'color');
         }
       }
-    }, 400);
+    } catch (err) {
+      console.error('Manual scan error:', err);
+    } finally {
+      setIsAnalyzing(false);
+      setAiStatus('Active & Scanning Pathway');
+    }
   };
 
   // AI Multimodal Scene & Object Description (Gemini Vision + Built-in Local AI)
