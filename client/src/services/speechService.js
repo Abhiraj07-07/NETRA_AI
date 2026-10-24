@@ -1,5 +1,5 @@
-// Speech Synthesis & Recognition Service with Hardware Noise Suppression, 
-// Earcon Audio Chimes, and Natural Language Intent Parser for Indian English, Hinglish & Hindi
+// Speech Synthesis & Recognition Service with Natural Language Intent Engine & Earcon Feedback
+// Supports Indian English, Hinglish, Numbers, and Hindi (Roman & Devanagari)
 
 class SpeechService {
   constructor() {
@@ -16,7 +16,6 @@ class SpeechService {
     this.intentListeners = new Set();
     this.stateListeners = new Set();
     this.shouldKeepListening = false;
-    this.noiseStream = null;
     this.audioCtx = null;
   }
 
@@ -63,44 +62,16 @@ class SpeechService {
   }
 
   // ==============================================================
-  // 1. HARDWARE NOISE SUPPRESSION & EARCON AUDIO CHIMES
+  // ACCESSIBLE AUDIO EARCONS (No hardware microphone locks)
   // ==============================================================
-  async enableHardwareNoiseSuppression() {
-    try {
-      if (typeof window !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
-        if (this.noiseStream) return;
-        this.noiseStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: { ideal: true },
-            noiseSuppression: { ideal: true },
-            autoGainControl: { ideal: true },
-            channelCount: 1,
-            sampleRate: 48000
-          }
-        });
-        console.log('[SpeechService] Hardware noise suppression & echo cancellation activated.');
-      }
-    } catch (e) {
-      console.warn('[SpeechService] Hardware noise suppression fallback:', e);
-    }
-  }
-
-  disableHardwareNoiseSuppression() {
-    if (this.noiseStream) {
-      this.noiseStream.getTracks().forEach(t => t.stop());
-      this.noiseStream = null;
-    }
-  }
-
-  // Audio Earcon Beep for Blind Users (Start, Success, Stop)
   playEarcon(type = 'start') {
     try {
       if (typeof window === 'undefined') return;
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
+      const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtxClass) return;
 
       if (!this.audioCtx || this.audioCtx.state === 'closed') {
-        this.audioCtx = new AudioContext();
+        this.audioCtx = new AudioCtxClass();
       }
       if (this.audioCtx.state === 'suspended') {
         this.audioCtx.resume();
@@ -114,20 +85,20 @@ class SpeechService {
       gain.connect(this.audioCtx.destination);
 
       if (type === 'start') {
-        // Two rising chimes: 520Hz -> 680Hz (Mic listening active)
+        // Two rising chimes: 520Hz -> 700Hz (Mic listening active)
         osc.type = 'sine';
         osc.frequency.setValueAtTime(520, now);
-        osc.frequency.exponentialRampToValueAtTime(680, now + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(700, now + 0.12);
         gain.gain.setValueAtTime(0.08, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.20);
         osc.start(now);
-        osc.stop(now + 0.22);
+        osc.stop(now + 0.20);
       } else if (type === 'success') {
-        // Quick high confirmation chime: 880Hz (Action executed)
+        // High confirmation ping: 880Hz -> 1046Hz (Action executed)
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(880, now);
         osc.frequency.setValueAtTime(1046, now + 0.08);
-        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.setValueAtTime(0.09, now);
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
         osc.start(now);
         osc.stop(now + 0.18);
@@ -147,74 +118,43 @@ class SpeechService {
   }
 
   // ==============================================================
-  // 2. NOISE FILTERING & VALIDATION (Rejects breaths, clicks, static)
+  // SPEECH SYNTHESIS (TTS)
   // ==============================================================
-  isNoiseOrGarbage(text, confidence = 1) {
-    if (!text || text.length < 2) return true;
-    const clean = text.toLowerCase().trim();
-
-    // Confidence filter: if browser reports confidence < 0.35, it's noise
-    if (confidence !== undefined && confidence > 0 && confidence < 0.35) {
-      console.log('[SpeechService] Discarded low-confidence noise:', clean, confidence);
-      return true;
-    }
-
-    // Common non-speech noise syllables
-    const NOISE_SYLLABLES = new Set([
-      'uh', 'um', 'ah', 'oh', 'eh', 'mm', 'mmm', 'shh', 'tsk', 
-      'ha', 'huh', 'hmm', 'hmmm', 'er', 'ur', 'pff', 'sh', 'ss', 
-      'sss', 'zz', 'zzz', 'ha ha', 'aah', 'ooh'
-    ]);
-    if (NOISE_SYLLABLES.has(clean)) {
-      console.log('[SpeechService] Filtered ambient syllable noise:', clean);
-      return true;
-    }
-
-    // Check for repetitive keyboard or mic stutter (e.g. "aaaaa", "kkkk")
-    if (/^(.)\1{2,}$/.test(clean)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  // ==============================================================
-  // 3. TEXT-TO-SPEECH (Spoken Audio Announcements)
-  // ==============================================================
-  speak(text, { priority = false, minIntervalMs = 2000, lang = 'en-IN' } = {}) {
+  speak(text, { priority = false, minIntervalMs = 1500, lang = 'en-IN' } = {}) {
     if (this.isMuted || !this.synth) return;
 
     const now = Date.now();
     if (!priority && text === this.lastSpokenText && now - this.lastSpokenTime < minIntervalMs) {
-      return; // Suppress duplicate spam
-    }
-
-    if (priority) {
-      this.synth.cancel(); // Interrupt non-critical speech immediately
-    } else if (this.synth.speaking) {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = this.rate;
-    utterance.pitch = this.pitch;
-    utterance.lang = lang;
+    try {
+      if (priority) {
+        this.synth.cancel();
+      }
 
-    // Pick natural voice if available
-    const voices = this.synth.getVoices();
-    const naturalVoice = voices.find(v => 
-      (v.lang.startsWith('en-IN') || v.lang.startsWith('hi') || v.lang.startsWith('en')) &&
-      (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('India'))
-    ) || voices.find(v => v.lang.startsWith('en'));
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = this.rate;
+      utterance.pitch = this.pitch;
+      utterance.lang = lang;
 
-    if (naturalVoice) {
-      utterance.voice = naturalVoice;
+      const voices = this.synth.getVoices ? this.synth.getVoices() : [];
+      const naturalVoice = voices.find(v => 
+        (v.lang.startsWith('en-IN') || v.lang.startsWith('hi') || v.lang.startsWith('en')) &&
+        (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('India'))
+      ) || voices.find(v => v.lang.startsWith('en'));
+
+      if (naturalVoice) {
+        utterance.voice = naturalVoice;
+      }
+
+      this.lastSpokenText = text;
+      this.lastSpokenTime = now;
+
+      this.synth.speak(utterance);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
     }
-
-    this.lastSpokenText = text;
-    this.lastSpokenTime = now;
-
-    this.synth.speak(utterance);
   }
 
   stop() {
@@ -224,17 +164,18 @@ class SpeechService {
   }
 
   // ==============================================================
-  // 4. NATURAL LANGUAGE INTENT PARSER (English + Hinglish + Hindi)
+  // NATURAL LANGUAGE INTENT PARSER (English, Hinglish & Hindi)
   // ==============================================================
   parseIntent(rawText) {
     if (!rawText) return null;
-    const text = rawText.toLowerCase().trim();
+    const text = rawText.toLowerCase().trim().replace(/[.,!?;:]/g, '');
 
-    // 1. CURRENCY (₹10 - ₹500 Indian Banknotes)
+    // 1. CURRENCY (₹10 - ₹500 Notes)
     if (
       text.includes('currency') || text.includes('paisa') || text.includes('paise') || 
       text.includes('rupaye') || text.includes('rupee') || text.includes('rupees') || 
       text.includes('note') || text.includes('kitne ka') || text.includes('kitna') ||
+      text.includes('money') || text.includes('cash') ||
       text.includes('पैसे') || text.includes('रुपया') || text.includes('रुपये') || text.includes('नोट') || text.includes('करेंसी')
     ) {
       return { 
@@ -244,12 +185,12 @@ class SpeechService {
       };
     }
 
-    // 2. MEDICINE & TEXT OCR (Medicine packaging, dosage, expiry, signage)
+    // 2. MEDICINE & TEXT OCR
     if (
       text.includes('medicine') || text.includes('dawai') || text.includes('dawa') || 
       text.includes('strip') || text.includes('tablet') || text.includes('goli') || 
       text.includes('expiry') || text.includes('dosage') || text.includes('parchi') ||
-      (text.includes('read') && !text.includes('screen')) || text.includes('padho') || text.includes('ocr') ||
+      text.includes('padho') || text.includes('read') || text.includes('ocr') || text.includes('text') ||
       text.includes('दवा') || text.includes('दवाई') || text.includes('गोली') || text.includes('पढ़ो') || text.includes('पर्ची')
     ) {
       return { 
@@ -259,21 +200,21 @@ class SpeechService {
       };
     }
 
-    // 3. COLOR & CLOTHING (Dress, shirt, color swatch)
+    // 3. COLOR & CLOTHING
     if (
       text.includes('color') || text.includes('colour') || text.includes('rang') || 
       text.includes('kapde') || text.includes('kapda') || text.includes('shirt') || 
-      text.includes('pant') || text.includes('kurta') ||
+      text.includes('pant') || text.includes('kurta') || text.includes('shade') ||
       text.includes('रंग') || text.includes('कपड़ा') || text.includes('कपड़े') || text.includes('कलर')
     ) {
       return { 
         intent: 'COLOR', 
-        speech: "Opening Color Identifier. Point center reticle at clothes or object.",
+        speech: "Opening Color Identifier. Point center target at clothes or object.",
         feedback: "Action: Opened Color Identifier"
       };
     }
 
-    // 4. TORCH / FLASHLIGHT (On/Off)
+    // 4. TORCH / FLASHLIGHT
     if (
       text.includes('torch') || text.includes('flashlight') || text.includes('flash') || 
       text.includes('batti') || text.includes('roshni') || text.includes('light') ||
@@ -288,10 +229,10 @@ class SpeechService {
       };
     }
 
-    // 5. CAMERA START / STOP (In Vision Assistant)
+    // 5. CAMERA STOP
     if (
-      (text.includes('camera') || text.includes('video')) && 
-      (text.includes('stop') || text.includes('band') || text.includes('pause') || text.includes('ruk') || text.includes('बंद') || text.includes('रोको'))
+      text.includes('stop camera') || text.includes('camera band') || text.includes('camera pause') || 
+      text.includes('camera roko') || text.includes('कैमरा बंद') || text.includes('कैमरा रोको')
     ) {
       return {
         intent: 'CAMERA_STOP',
@@ -300,21 +241,10 @@ class SpeechService {
       };
     }
 
-    if (
-      (text.includes('camera') || text.includes('video')) && 
-      (text.includes('start') || text.includes('chalu') || text.includes('on') || text.includes('resume') || text.includes('shuru') || text.includes('चालू') || text.includes('शुरू'))
-    ) {
-      return {
-        intent: 'CAMERA_START',
-        speech: "Camera started. Obstacle scanning active.",
-        feedback: "Action: Camera Started"
-      };
-    }
-
-    // 6. SCAN NOW / BATAO / DEKHO
+    // 6. SCAN NOW
     if (
       text.includes('scan') || text.includes('batao') || text.includes('dekho') || 
-      text.includes('kya hai') || text.includes('photo') || text.includes('capture') ||
+      text.includes('photo') || text.includes('capture') ||
       text.includes('स्कैन') || text.includes('बताओ') || text.includes('देखो')
     ) {
       return {
@@ -324,26 +254,33 @@ class SpeechService {
       };
     }
 
-    // 7. OBSTACLES & VISION RADAR (Default Vision Mode)
+    // 7. VISION / CAMERA / OBSTACLE RADAR / WALLS / KEY 1
+    // Matches: "vision", "bision", "bijan", "vigyan", "camera", "obstacle", "samne", "rasta", "1", "one", "ek", "diwar", "wall"
     if (
-      text.includes('vision') || text.includes('camera') || text.includes('obstacle') || 
+      text.includes('vision') || text.includes('bijan') || text.includes('bision') || text.includes('vijan') ||
+      text.includes('camera') || text.includes('obstacle') || text.includes('detect') ||
       text.includes('rasta') || text.includes('samne') || text.includes('aage') || 
       text.includes('dekhna') || text.includes('radar') || text.includes('barrier') ||
-      text.includes('सामने') || text.includes('रास्ता') || text.includes('आगे') || text.includes('कैमरा') || text.includes('बाधा')
+      text.includes('wall') || text.includes('diwar') || text.includes('deewar') ||
+      text === '1' || text === 'one' || text === 'ek' || text === 'number 1' || text === 'number one' ||
+      text.includes('विज़न') || text.includes('विजन') || text.includes('कैमरा') || 
+      text.includes('सामने') || text.includes('रास्ता') || text.includes('आगे') || 
+      text.includes('दीवार') || text.includes('बाधा') || text === 'एक' || text === '१'
     ) {
       return { 
         intent: 'VISION_RADAR', 
-        speech: "Opening Vision Assistant. Real-time 3D spatial obstacle radar ready.",
+        speech: "Opening Vision Assistant. Real-time 3D spatial obstacle radar and wall detector ready.",
         feedback: "Action: Opened Vision Obstacle Radar"
       };
     }
 
-    // 8. EMERGENCY SOS / PANIC ALERT
+    // 8. EMERGENCY SOS / PANIC / KEY 3
     if (
       text.includes('sos') || text.includes('emergency') || text.includes('help') || 
       text.includes('bachao') || text.includes('madad') || text.includes('khatra') || 
-      text.includes('police') || text.includes('ambulance') || text.includes('danger') ||
-      text.includes('बचाओ') || text.includes('मदद') || text.includes('खतरा') || text.includes('इमरजेंसी')
+      text.includes('police') || text.includes('danger') || text.includes('siren') ||
+      text === '3' || text === 'three' || text === 'teen' || text === 'number 3' ||
+      text.includes('बचाओ') || text.includes('मदद') || text.includes('खतरा') || text.includes('इमरजेंसी') || text === 'तीन' || text === '३'
     ) {
       return { 
         intent: 'SOS_TRIGGER', 
@@ -370,12 +307,13 @@ class SpeechService {
       };
     }
 
-    // 11. GPS LOCATION / WHERE AM I
+    // 11. GPS LOCATION / WHERE AM I / KEY 4
     if (
       text.includes('location') || text.includes('where am i') || text.includes('gps') || 
       text.includes('kaha hu') || text.includes('kaha hoon') || text.includes('meri jagah') || 
-      text.includes('address') || text.includes('pata') ||
-      text.includes('कहाँ हूँ') || text.includes('कहा हू') || text.includes('लोकेशन') || text.includes('पता')
+      text.includes('address') || text.includes('pata') || text.includes('jagah') ||
+      text === '4' || text === 'four' || text === 'char' || text === 'number 4' ||
+      text.includes('कहाँ हूँ') || text.includes('कहा हू') || text.includes('लोकेशन') || text === 'चार' || text === '४'
     ) {
       return { 
         intent: 'LOCATION', 
@@ -384,11 +322,12 @@ class SpeechService {
       };
     }
 
-    // 12. HAZARD COMMUNITY MAP
+    // 12. HAZARD COMMUNITY MAP / KEY 5
     if (
-      text.includes('hazard') || text.includes('pothole') || text.includes('gaddha') || 
-      text.includes('manhole') || text.includes('khatre') || text.includes('trench') ||
-      text.includes('गड्ढा') || text.includes('मैनहोल') || text.includes('खतरे')
+      text.includes('hazard') || text.includes('hazards') || text.includes('pothole') || text.includes('potholes') ||
+      text.includes('gaddha') || text.includes('manhole') || text.includes('khatre') || text.includes('trench') ||
+      text === '5' || text === 'five' || text === 'panch' || text === 'number 5' ||
+      text.includes('गड्ढा') || text.includes('मैनहोल') || text.includes('खतरे') || text === 'पांच' || text === '५'
     ) {
       return { 
         intent: 'HAZARDS', 
@@ -397,11 +336,12 @@ class SpeechService {
       };
     }
 
-    // 13. FAMILY GUARDIAN PORTAL
+    // 13. FAMILY GUARDIAN PORTAL / KEY 6
     if (
       text.includes('family') || text.includes('guardian') || text.includes('portal') || 
       text.includes('parivar') || text.includes('caregiver') || text.includes('relatives') ||
-      text.includes('परिवार') || text.includes('गार्जियन')
+      text === '6' || text === 'six' || text === 'chhe' || text === 'number 6' ||
+      text.includes('परिवार') || text.includes('गार्जियन') || text === 'छह' || text === '६'
     ) {
       return { 
         intent: 'FAMILY', 
@@ -410,10 +350,25 @@ class SpeechService {
       };
     }
 
-    // 14. SETTINGS & PROFILE
+    // 14. VOICE GUIDANCE PAGE / KEY 2
+    if (
+      text.includes('voice') || text.includes('guidance') || text.includes('bolkar') || 
+      text.includes('awaaz') || text.includes('avaj') || text.includes('abaj') ||
+      text === '2' || text === 'two' || text === 'do' || text === 'number 2' ||
+      text.includes('आवाज़') || text.includes('आवाज') || text === 'दो' || text === '२'
+    ) {
+      return {
+        intent: 'VOICE_PAGE',
+        speech: "Opening Voice Guidance and Commands Guide.",
+        feedback: "Action: Opened Voice Guidance"
+      };
+    }
+
+    // 15. SETTINGS & PROFILE
     if (
       text.includes('setting') || text.includes('settings') || text.includes('profile') || 
-      text.includes('kalibrate') || text.includes('calibration') || text.includes('setting kholo')
+      text.includes('kalibrate') || text.includes('calibration') ||
+      text.includes('सेटिंग') || text.includes('प्रोफाइल')
     ) {
       return {
         intent: 'SETTINGS',
@@ -422,10 +377,11 @@ class SpeechService {
       };
     }
 
-    // 15. HOME / DASHBOARD / BACK
+    // 16. HOME / DASHBOARD / BACK / KEY 0
     if (
       text.includes('home') || text.includes('main screen') || text.includes('dashboard') || 
       text.includes('ghar') || text.includes('wapas') || text.includes('back') ||
+      text === '0' || text === 'zero' ||
       text.includes('घर') || text.includes('वापस') || text.includes('होम')
     ) {
       return { 
@@ -435,7 +391,7 @@ class SpeechService {
       };
     }
 
-    // 16. MUTE / UNMUTE AUDIO
+    // 17. MUTE / UNMUTE AUDIO
     if (
       text.includes('mute') || text.includes('chup') || text.includes('silent') || 
       text.includes('shant') || text.includes('awaz band') || text.includes('चुप') || text.includes('म्यूट')
@@ -458,40 +414,50 @@ class SpeechService {
       };
     }
 
-    // 17. READ SCREEN / SUMMARIZE
-    if (text.includes('read screen') || text.includes('kya hai screen') || text.includes('screen batao')) {
+    // 18. GENERAL START / ON
+    if (text === 'start' || text === 'chalu' || text === 'on' || text === 'shuru' || text === 'शुरू' || text === 'चालू') {
       return {
-        intent: 'READ_SCREEN',
-        speech: "Reading current screen summary.",
-        feedback: "Action: Reading Screen Summary"
+        intent: 'CAMERA_START',
+        speech: "Starting camera and obstacle scanning.",
+        feedback: "Action: Started Camera"
       };
     }
 
-    // 18. HELP / COMMANDS
-    if (
-      text.includes('help') || text.includes('options') || text.includes('kya bolu') || 
-      text.includes('command') || text.includes('commands') || text.includes('madad chahiye')
-    ) {
+    // 19. GENERAL STOP / OFF
+    if (text === 'stop' || text === 'band' || text === 'pause' || text === 'ruk' || text === 'ruko' || text === 'बंद' || text === 'रुको') {
+      return {
+        intent: 'CAMERA_STOP',
+        speech: "Camera and scanner stopped.",
+        feedback: "Action: Stopped Camera"
+      };
+    }
+
+    // 20. HELP / COMMANDS
+    if (text.includes('help') || text.includes('options') || text.includes('command') || text.includes('kya bolu')) {
       return {
         intent: 'HELP',
-        speech: "Available voice commands: Currency, Medicine, Color, Vision Camera, SOS, Location, Hazards, Family, Torch, and Home.",
+        speech: "Say Vision, Currency, Medicine, Color, SOS, Location, Hazards, or Family.",
         feedback: "Action: Spoke Available Commands"
       };
     }
 
-    // Unrecognized intent
+    // Fallback: If not recognized
     return {
       intent: 'UNKNOWN',
       rawText: text,
-      speech: `Heard: "${text}". Say Currency, Medicine, Camera, or SOS.`,
-      feedback: `Heard: "${text}" (Say 'Help' for list)`
+      speech: `Heard "${text}". Try saying Vision, Currency, Medicine, or SOS.`,
+      feedback: `Heard: "${text}"`
     };
   }
 
   // ==============================================================
-  // 5. SPEECH RECOGNITION WITH ACTIVE NOISE SUPPRESSION
+  // SPEECH RECOGNITION (Direct, Unblocked Microphone Access)
   // ==============================================================
-  initVoiceCommands() {
+  initVoiceCommands(onCommand) {
+    if (onCommand) {
+      this.addCommandListener(onCommand);
+    }
+
     if (this.recognition) return true;
 
     const SpeechRecognition = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
@@ -515,15 +481,11 @@ class SpeechService {
       this.recognition.onresult = (event) => {
         const lastResultIndex = event.results.length - 1;
         const res = event.results[lastResultIndex][0];
-        const transcript = res.transcript.trim();
-        const confidence = res.confidence;
+        const transcript = res.transcript ? res.transcript.trim() : '';
 
-        // Filter out background noise, clicks, breathing, and static
-        if (this.isNoiseOrGarbage(transcript, confidence)) {
-          return;
-        }
+        if (!transcript || transcript.length < 1) return;
 
-        console.log('[SpeechService Voice Command Accepted]:', transcript, `(Confidence: ${Math.round(confidence * 100)}%)`);
+        console.log('[Speech Recognized]:', transcript);
 
         // Play positive command chime
         this.playEarcon('success');
@@ -531,7 +493,7 @@ class SpeechService {
         // 1. Run through Intent Parser
         const intentResult = this.parseIntent(transcript);
 
-        // 2. Dispatch to intent listeners
+        // 2. Dispatch to intent listeners (App.jsx, VisionAssistant, etc.)
         if (intentResult) {
           this.intentListeners.forEach(listener => {
             try { listener(intentResult, transcript); } catch (e) { console.error('Intent listener error:', e); }
@@ -545,16 +507,15 @@ class SpeechService {
       };
 
       this.recognition.onerror = (e) => {
-        console.warn('Speech recognition error:', e.error);
+        console.warn('Speech recognition notice:', e.error);
         if (e.error === 'not-allowed') {
           this.shouldKeepListening = false;
           this.notifyStateListeners(false);
-          this.disableHardwareNoiseSuppression();
         }
       };
 
       this.recognition.onend = () => {
-        // Auto-reconnect with noise suppression if user enabled hands-free voice mode
+        // Auto-reconnect continuous listening
         if (this.shouldKeepListening) {
           setTimeout(() => {
             if (this.shouldKeepListening && this.recognition) {
@@ -564,10 +525,9 @@ class SpeechService {
                 // start may fail if already running
               }
             }
-          }, 300);
+          }, 200);
         } else {
           this.notifyStateListeners(false);
-          this.disableHardwareNoiseSuppression();
         }
       };
 
@@ -580,7 +540,6 @@ class SpeechService {
 
   startListening() {
     this.shouldKeepListening = true;
-    this.enableHardwareNoiseSuppression();
     if (!this.recognition) {
       this.initVoiceCommands();
     }
@@ -597,7 +556,6 @@ class SpeechService {
   stopListening() {
     this.shouldKeepListening = false;
     this.playEarcon('stop');
-    this.disableHardwareNoiseSuppression();
     if (this.recognition) {
       try {
         this.recognition.stop();

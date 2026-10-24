@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Navbar from './components/Navbar';
 import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 import VoiceAssistantBanner from './components/VoiceAssistantBanner';
@@ -29,6 +29,11 @@ export default function App() {
   const [voiceActionFeedback, setVoiceActionFeedback] = useState('');
   const [batteryState, setBatteryState] = useState({ level: 95, isCharging: false, isLow: false });
 
+  const currentPageRef = useRef(currentPage);
+  useEffect(() => {
+    currentPageRef.current = currentPage;
+  }, [currentPage]);
+
   // Handle Natural Language Voice Intents (English, Hinglish & Hindi)
   const handleIntentCommand = useCallback((intentObj, rawText) => {
     if (!intentObj) return;
@@ -36,6 +41,9 @@ export default function App() {
     console.log('[Global Voice Intent Triggered]:', intent, rawText);
     setLastHeardVoice(rawText || speech);
     if (feedback) setVoiceActionFeedback(feedback);
+
+    // Broadcast event across active components
+    window.dispatchEvent(new CustomEvent('netra:voice-intent', { detail: intentObj }));
 
     switch (intent) {
       case 'CURRENCY':
@@ -60,6 +68,11 @@ export default function App() {
       case 'CAMERA_START':
         setVisionMode('obstacles');
         setCurrentPage('vision');
+        speechService.speak(speech, { priority: true });
+        break;
+
+      case 'VOICE_PAGE':
+        setCurrentPage('voice');
         speechService.speak(speech, { priority: true });
         break;
 
@@ -132,8 +145,9 @@ export default function App() {
           location: "You are on Live Location Sharing. Streaming GPS to guardians.",
           hazards: "You are on Hazard Map. Displays road hazards and obstacles.",
           family: "You are on Family Portal. Guard monitors user safety in real time.",
+          voice: "You are on Voice Guidance and hands-free command center.",
           settings: "You are on Settings. Configure voice rate and profile."
-        }[currentPage] || "Welcome to NETRA AI.";
+        }[currentPageRef.current] || "Welcome to NETRA AI.";
         speechService.speak(pageDesc, { priority: true });
         break;
       }
@@ -147,7 +161,7 @@ export default function App() {
         speechService.speak(speech || `Heard: "${rawText}". Say Currency, Camera, Medicine, or SOS.`);
         break;
     }
-  }, [currentPage]);
+  }, []); // Stable [] dependency array
 
   // Handle direct spoken text wrapper
   const handleVoiceCommand = useCallback((spokenText) => {

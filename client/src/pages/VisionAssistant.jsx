@@ -39,14 +39,13 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
 
   // React to prop change
   useEffect(() => {
-    if (initialMode && initialMode !== visionMode) {
-      switchMode(initialMode);
+    if (initialMode && initialMode !== visionModeRef.current) {
+      switchMode(initialMode, true);
     }
   }, [initialMode]);
 
   // Auto-Start camera & register voice commands
   useEffect(() => {
-    speechService.speak("Vision Assistant active. Initializing camera and spatial radar.", { priority: true });
     startCamera();
 
     // Natural Language Voice Intent Listener
@@ -54,16 +53,16 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
       if (!intentObj) return;
       const { intent } = intentObj;
       if (intent === 'CURRENCY') {
-        switchMode('currency');
+        switchMode('currency', true);
         setTimeout(handleManualScan, 300);
       } else if (intent === 'MEDICINE_OCR') {
-        switchMode('ocr');
+        switchMode('ocr', true);
         setTimeout(handleManualScan, 300);
       } else if (intent === 'COLOR') {
-        switchMode('color');
+        switchMode('color', true);
         setTimeout(handleManualScan, 300);
       } else if (intent === 'VISION_RADAR') {
-        switchMode('obstacles');
+        switchMode('obstacles', false);
       } else if (intent === 'TORCH') {
         toggleTorch();
       } else if (intent === 'SCAN_NOW') {
@@ -105,11 +104,13 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   }, []);
 
   // Switch Vision Mode with Audio Cue
-  const switchMode = (mode) => {
+  const switchMode = (mode, silent = false) => {
     setVisionMode(mode);
     setSmartResult(null);
     clearCanvas();
     
+    if (silent) return;
+
     if (mode === 'currency') {
       speechService.speak("Currency Reader Mode. Point camera at any Indian rupee note ₹10 to ₹500.", { priority: true });
     } else if (mode === 'ocr') {

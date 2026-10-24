@@ -4,80 +4,47 @@ import { speechService } from '../services/speechService';
 
 export default function VoicePage({ onBack, onExecuteCommand }) {
   const [transcriptHistory, setTranscriptHistory] = useState([
-    { text: 'System ready. Waiting for voice commands.', type: 'system', time: 'Just now' }
+    { text: 'Voice Assistant Ready. Speak any command or choose a quick shortcut below.', type: 'system', time: 'Just now' }
   ]);
-  const [isListening, setIsListening] = useState(false);
-  const [speechRate, setSpeechRate] = useState(1.0);
+  const [isListening, setIsListening] = useState(speechService.isListening);
 
   useEffect(() => {
-    speechService.speak("Voice guidance assistant in light mode. Say 'Start Vision', 'Trigger SOS', 'Where am I', 'Report Hazard', or 'Open Family' to navigate hands-free.", { priority: true });
+    speechService.speak("Voice guidance assistant in light mode. Say 'Vision', 'Trigger SOS', 'Where am I', 'Report Hazard', or 'Open Family' to navigate hands-free.", { priority: true });
     
-    const supported = speechService.initVoiceCommands((spokenText) => {
-      setTranscriptHistory(prev => [
-        { text: spokenText, type: 'user', time: new Date().toLocaleTimeString() },
-        ...prev
-      ]);
-      handleVoiceCommand(spokenText);
-    });
-
-    if (supported) {
+    // Automatically start listening if not already running
+    if (!speechService.isListening) {
       speechService.startListening();
-      setIsListening(true);
     }
 
+    // Subscribe to speech state
+    const unsubscribeState = speechService.addStateListener(setIsListening);
+
+    // Subscribe to natural language intents to display live conversation transcript
+    const unsubscribeIntent = speechService.addIntentListener((intentObj, rawText) => {
+      if (!intentObj) return;
+      setTranscriptHistory(prev => [
+        { text: rawText || intentObj.speech, type: 'user', time: new Date().toLocaleTimeString() },
+        { text: intentObj.speech || intentObj.feedback, type: 'assistant', time: new Date().toLocaleTimeString() },
+        ...prev
+      ]);
+    });
+
     return () => {
-      speechService.stopListening();
+      unsubscribeState();
+      unsubscribeIntent();
+      // Notice: We deliberately do NOT call speechService.stopListening() so global voice control remains active across pages!
     };
   }, []);
 
-  const handleVoiceCommand = (cmd) => {
+  const handleChipClick = (cmd, targetPage) => {
     const parsed = speechService.parseIntent(cmd);
-    let reply = '';
-
     if (parsed) {
-      reply = parsed.speech;
-      speechService.speak(reply, { priority: true });
-
-      switch (parsed.intent) {
-        case 'CURRENCY':
-        case 'MEDICINE_OCR':
-        case 'COLOR':
-        case 'VISION_RADAR':
-        case 'CAMERA_START':
-          setTimeout(() => onExecuteCommand('vision'), 800);
-          break;
-        case 'SOS_TRIGGER':
-        case 'SEND_SMS':
-        case 'SEND_WHATSAPP':
-          setTimeout(() => onExecuteCommand('sos'), 800);
-          break;
-        case 'LOCATION':
-          setTimeout(() => onExecuteCommand('location'), 800);
-          break;
-        case 'HAZARDS':
-          setTimeout(() => onExecuteCommand('hazards'), 800);
-          break;
-        case 'FAMILY':
-          setTimeout(() => onExecuteCommand('family'), 800);
-          break;
-        case 'SETTINGS':
-          setTimeout(() => onExecuteCommand('settings'), 800);
-          break;
-        case 'HOME':
-          setTimeout(() => onExecuteCommand('home'), 800);
-          break;
-        default:
-          break;
-      }
-    } else {
-      reply = `Heard: "${cmd}". Say Currency, Camera, Medicine, or SOS.`;
-      speechService.speak(reply);
+      speechService.intentListeners.forEach(listener => {
+        try { listener(parsed, cmd); } catch (e) { console.error(e); }
+      });
+    } else if (targetPage) {
+      onExecuteCommand(targetPage);
     }
-
-    setTranscriptHistory(prev => [
-      { text: reply, type: 'assistant', time: new Date().toLocaleTimeString() },
-      ...prev
-    ]);
   };
 
   return (
@@ -106,11 +73,9 @@ export default function VoicePage({ onBack, onExecuteCommand }) {
           onClick={() => {
             if (isListening) {
               speechService.stopListening();
-              setIsListening(false);
               speechService.speak("Voice listening stopped.");
             } else {
               speechService.startListening();
-              setIsListening(true);
               speechService.speak("Listening for voice commands.");
             }
           }}
@@ -140,17 +105,18 @@ export default function VoicePage({ onBack, onExecuteCommand }) {
             {isListening ? "Listening for your voice..." : "Voice Recognition Paused"}
           </h2>
           <p className="text-xs text-slate-600 font-medium mt-1">
-            Speak naturally. NETRA AI recognizes voice commands for complete hands-free navigation.
+            Speak naturally. NETRA AI recognizes voice commands in English, Hinglish, and Hindi.
           </p>
         </div>
 
         {/* Quick Command Chips */}
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
           {[
-            { cmd: "Start Vision", target: 'vision' },
-            { cmd: "Read Currency", target: 'vision' },
-            { cmd: "Scan Medicine", target: 'vision' },
-            { cmd: "Identify Color", target: 'vision' },
+            { cmd: "Vision", target: 'vision' },
+            { cmd: "Currency", target: 'vision' },
+            { cmd: "Medicine", target: 'vision' },
+            { cmd: "Color", target: 'vision' },
+            { cmd: "Torch", target: 'vision' },
             { cmd: "Emergency SOS", target: 'sos' },
             { cmd: "Where Am I", target: 'location' },
             { cmd: "Report Hazard", target: 'hazards' },
@@ -158,7 +124,7 @@ export default function VoicePage({ onBack, onExecuteCommand }) {
           ].map(item => (
             <button
               key={item.cmd}
-              onClick={() => handleVoiceCommand(item.cmd)}
+              onClick={() => handleChipClick(item.cmd, item.target)}
               className="px-3.5 py-1.5 rounded-xl bg-slate-50 hover:bg-amber-50 text-slate-800 border border-slate-200 hover:border-amber-400 text-xs font-bold transition-colors shadow-xs"
             >
               "{item.cmd}"
