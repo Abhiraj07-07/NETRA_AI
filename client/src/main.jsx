@@ -10,7 +10,7 @@ createRoot(document.getElementById('root')).render(
 )
 
 // Register Offline Service Worker for Progressive Web App (PWA)
-if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(err => {
       console.warn('SW registration skipped:', err);
