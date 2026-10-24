@@ -108,12 +108,18 @@ class VisionDetector {
   // Main Detection Function - Runs 100% reliably on every frame
   async detect(videoElement) {
     if (!videoElement || videoElement.readyState < 2) return [];
+    return this.detectObjects(videoElement);
+  }
+
+  // Unified Object & Obstacle Detection Engine (Works with Canvas or Video)
+  async detectObjects(element) {
+    if (!element) return [];
 
     const startTime = performance.now();
-    const vw = videoElement.videoWidth || 640;
-    const vh = videoElement.videoHeight || 480;
+    const vw = element.videoWidth || element.width || 640;
+    const vh = element.videoHeight || element.height || 480;
 
-    // 1. If Deep Neural Network is loaded, run COCO-SSD
+    // 1. If Deep Neural Network (COCO-SSD) is loaded, run neural inference
     if (this.model) {
       try {
         if (!this.offscreenCanvas) {
@@ -123,8 +129,8 @@ class VisionDetector {
           this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
         }
 
-        this.offscreenCtx.drawImage(videoElement, 0, 0, 480, 360);
-        const predictions = await this.model.detect(this.offscreenCanvas, 5, 0.35);
+        this.offscreenCtx.drawImage(element, 0, 0, 480, 360);
+        const predictions = await this.model.detect(this.offscreenCanvas, 6, 0.28);
 
         if (predictions && predictions.length > 0) {
           const duration = Math.max(1, Math.round(performance.now() - startTime));
@@ -137,12 +143,12 @@ class VisionDetector {
       }
     }
 
-    // 2. Real-time Native Saliency, Wall & Obstacle Contour Detector
-    return this.detectNativeObstacles(videoElement, vw, vh, startTime);
+    // 2. Real-time Native Computer Vision Saliency, Skin & Object Classifier
+    return this.detectNativeObstacles(element, vw, vh, startTime);
   }
 
-  // Real-Time Computer Vision Saliency, Wall & Contour Detector
-  detectNativeObstacles(videoElement, vw, vh, startTime) {
+  // Real-Time Computer Vision Saliency, Skin, Face, Wall & Object Classifier
+  detectNativeObstacles(element, vw, vh, startTime) {
     if (!this.offscreenCanvas) {
       this.offscreenCanvas = document.createElement('canvas');
       this.offscreenCanvas.width = 160;
@@ -152,25 +158,28 @@ class VisionDetector {
 
     const sw = 160;
     const sh = 120;
-    this.offscreenCtx.drawImage(videoElement, 0, 0, sw, sh);
+    this.offscreenCtx.drawImage(element, 0, 0, sw, sh);
     const imgData = this.offscreenCtx.getImageData(0, 0, sw, sh).data;
 
     // Divide view into 3 Zones: Left (0..53), Center (54..106), Right (107..159)
     const zones = {
-      left: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0 },
-      center: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0 },
-      right: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0 }
+      left: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0, skinCount: 0, darkCount: 0 },
+      center: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0, skinCount: 0, darkCount: 0 },
+      right: { weight: 0, minX: sw, maxX: 0, minY: sh, maxY: 0, count: 0, skinCount: 0, darkCount: 0 }
     };
 
-    let totalEdges = 0;
+    let totalSkinPixels = 0;
     let horizontalEdgeCount = 0;
     let verticalEdgeCount = 0;
 
-    // Edge & Surface gradient detection across pixels
-    for (let y = 8; y < sh - 8; y += 4) {
-      for (let x = 8; x < sw - 8; x += 4) {
+    // Scan downsampled frame for gradients, human skin tone, and object edges
+    for (let y = 6; y < sh - 6; y += 3) {
+      for (let x = 6; x < sw - 6; x += 3) {
         const idx = (y * sw + x) * 4;
-        const lum = (imgData[idx] * 299 + imgData[idx + 1] * 587 + imgData[idx + 2] * 114) / 1000;
+        const pr = imgData[idx];
+        const pg = imgData[idx + 1];
+        const pb = imgData[idx + 2];
+        const lum = (pr * 299 + pg * 587 + pb * 114) / 1000;
 
         const rightLum = (imgData[idx + 4] * 299 + imgData[idx + 5] * 587 + imgData[idx + 6] * 114) / 1000;
         const downLum = (imgData[idx + sw * 4] * 299 + imgData[idx + sw * 4 + 1] * 587 + imgData[idx + sw * 4 + 2] * 114) / 1000;
@@ -179,15 +188,29 @@ class VisionDetector {
         const vDiff = Math.abs(lum - downLum);
         const edgeDiff = hDiff + vDiff;
 
-        if (hDiff > 24) verticalEdgeCount++;
-        if (vDiff > 24) horizontalEdgeCount++;
+        if (hDiff > 20) verticalEdgeCount++;
+        if (vDiff > 20) horizontalEdgeCount++;
+
+        const zKey = x < 54 ? 'left' : x > 106 ? 'right' : 'center';
+        const z = zones[zKey];
+
+        // Human Skin Tone Filter (Peer et al. standard human skin model)
+        const isSkin = pr > 90 && pg > 40 && pb > 20 && 
+                       (Math.max(pr, pg, pb) - Math.min(pr, pg, pb) > 15) && 
+                       Math.abs(pr - pg) > 12 && pr > pg && pr > pb;
+        if (isSkin) {
+          totalSkinPixels++;
+          z.skinCount++;
+        }
+
+        // Dark/contrast pixel (phone screen, laptop bezel, dark bottle)
+        if (lum < 45) {
+          z.darkCount++;
+        }
 
         const proximityWeight = y / sh;
-        if (edgeDiff > 26) {
-          totalEdges++;
-          const zKey = x < 54 ? 'left' : x > 106 ? 'right' : 'center';
-          const z = zones[zKey];
-          z.weight += edgeDiff * proximityWeight;
+        if (edgeDiff > 20 || isSkin) {
+          z.weight += (edgeDiff + (isSkin ? 30 : 0)) * proximityWeight;
           z.count++;
           if (x < z.minX) z.minX = x;
           if (x > z.maxX) z.maxX = x;
@@ -201,116 +224,111 @@ class VisionDetector {
     const scaleX = vw / sw;
     const scaleY = vh / sh;
 
-    // 1. Direct Close Wall Check (Massive planar obstruction right ahead)
-    if (zones.center.count > 30 && (zones.center.maxY - zones.center.minY) > sh * 0.55 && (zones.center.maxX - zones.center.minX) > sw * 0.45) {
+    // 1. Wall / Planar Surface Check (Massive obstruction spanning center)
+    if (zones.center.count > 25 && (zones.center.maxY - zones.center.minY) > sh * 0.50 && (zones.center.maxX - zones.center.minX) > sw * 0.40 && totalSkinPixels < 15) {
       const boxX = Math.round(Math.max(0, zones.center.minX * scaleX - 15));
       const boxY = Math.round(Math.max(0, zones.center.minY * scaleY - 15));
       const boxW = Math.round(Math.min(vw - boxX, (zones.center.maxX - zones.center.minX) * scaleX + 30));
       const boxH = Math.round(Math.min(vh - boxY, (zones.center.maxY - zones.center.minY) * scaleY + 30));
-
       const areaRatio = (boxW * boxH) / (vw * vh);
       const estDistance = Number(Math.max(0.5, Math.min(3.5, 0.42 / Math.sqrt(Math.max(0.05, areaRatio)))).toFixed(1));
 
-      let wallLabel = 'WALL DIRECTLY AHEAD';
-      let urgency = 'critical';
-
-      if (estDistance > 1.4) {
-        wallLabel = 'WALL / PARTITION AHEAD';
-        urgency = 'warning';
-      }
-
       detections.push({
         id: 'native_wall_center',
-        label: wallLabel,
+        class: 'wall',
+        label: estDistance <= 1.0 ? 'WALL DIRECTLY AHEAD' : 'WALL / PARTITION AHEAD',
         score: 95,
         bbox: [boxX, boxY, boxW, boxH],
         zone: 'center',
+        direction: 'center',
         pan: 0,
         distance: estDistance,
-        urgency,
+        urgency: estDistance <= 1.0 ? 'critical' : 'warning',
+        isWall: true,
         timestamp: Date.now()
       });
     }
 
-    // 2. Lateral Wall Check: Left Corridor Wall
-    if (zones.left.count > 25 && (zones.left.maxY - zones.left.minY) > sh * 0.65) {
-      const boxX = 0;
-      const boxY = Math.round(zones.left.minY * scaleY);
-      const boxW = Math.round(Math.min(vw * 0.4, (zones.left.maxX) * scaleX + 20));
-      const boxH = Math.round((zones.left.maxY - zones.left.minY) * scaleY);
+    // 2. Intelligent Object & Person Detection in Each Zone
+    ['center', 'left', 'right'].forEach(zKey => {
+      const z = zones[zKey];
+      // Realistic sensitivity threshold: count >= 6 and weight >= 80
+      if (z.count >= 6 && z.weight >= 80) {
+        const boxX = Math.round(Math.max(0, z.minX * scaleX - 15));
+        const boxY = Math.round(Math.max(0, z.minY * scaleY - 15));
+        const boxW = Math.round(Math.min(vw - boxX, Math.max(40, (z.maxX - z.minX) * scaleX + 30)));
+        const boxH = Math.round(Math.min(vh - boxY, Math.max(40, (z.maxY - z.minY) * scaleY + 30)));
 
-      detections.push({
-        id: 'native_wall_left',
-        label: 'WALL ON LEFT',
-        score: 91,
-        bbox: [boxX, boxY, boxW, boxH],
-        zone: 'left',
-        pan: -0.80,
-        distance: 1.0,
-        urgency: 'warning',
-        timestamp: Date.now()
-      });
-    }
+        const normX = (boxX + boxW / 2) / vw;
+        const pan = Number(((normX - 0.5) * 2).toFixed(2));
+        const areaRatio = (boxW * boxH) / (vw * vh);
+        const aspectRatio = boxH / Math.max(1, boxW);
 
-    // 3. Lateral Wall Check: Right Corridor Wall
-    if (zones.right.count > 25 && (zones.right.maxY - zones.right.minY) > sh * 0.65) {
-      const boxX = Math.round(zones.right.minX * scaleX);
-      const boxY = Math.round(zones.right.minY * scaleY);
-      const boxW = Math.round(vw - boxX);
-      const boxH = Math.round((zones.right.maxY - zones.right.minY) * scaleY);
+        // Classify based on skin tone, aspect ratio, position, and dimensions
+        let detectedClass = 'obstacle';
+        let detectedLabel = 'OBSTACLE';
+        let realHeight = 1.0;
 
-      detections.push({
-        id: 'native_wall_right',
-        label: 'WALL ON RIGHT',
-        score: 91,
-        bbox: [boxX, boxY, boxW, boxH],
-        zone: 'right',
-        pan: 0.80,
-        distance: 1.0,
-        urgency: 'warning',
-        timestamp: Date.now()
-      });
-    }
+        if (z.skinCount >= 6 || (totalSkinPixels >= 10 && zKey === 'center')) {
+          // Human face, hands, or standing body detected
+          detectedClass = 'person';
+          detectedLabel = 'PERSON';
+          realHeight = 1.70;
+        } else if (aspectRatio >= 1.4 && areaRatio < 0.20 && z.darkCount > 10) {
+          // Compact dark vertical rectangle (smartphone / handheld device)
+          detectedClass = 'cell phone';
+          detectedLabel = 'MOBILE PHONE';
+          realHeight = 0.16;
+        } else if (aspectRatio >= 1.6 && areaRatio < 0.18) {
+          // Narrow vertical object (water bottle / beverage / container)
+          detectedClass = 'bottle';
+          detectedLabel = 'BOTTLE';
+          realHeight = 0.26;
+        } else if (aspectRatio <= 0.85 && areaRatio > 0.10 && areaRatio < 0.35 && boxY > vh * 0.25) {
+          // Horizontal surface with screen/keyboard (laptop / screen)
+          detectedClass = 'laptop';
+          detectedLabel = 'LAPTOP / SCREEN';
+          realHeight = 0.30;
+        } else if (areaRatio >= 0.25 && boxY > vh * 0.30) {
+          // Medium/large furniture (chair / desk / table)
+          detectedClass = 'chair';
+          detectedLabel = 'CHAIR / FURNITURE';
+          realHeight = 0.85;
+        } else if (areaRatio >= 0.40) {
+          detectedClass = 'wall';
+          detectedLabel = 'WALL / BARRIER';
+          realHeight = 2.40;
+        } else {
+          detectedClass = 'obstacle';
+          detectedLabel = zKey === 'center' ? 'OBSTACLE AHEAD' : `OBJECT ON ${zKey.toUpperCase()}`;
+          realHeight = 0.80;
+        }
 
-    // 4. Standard Obstacles (Persons, chairs, general hazards)
-    if (detections.length === 0) {
-      ['center', 'left', 'right'].forEach(zKey => {
-        const z = zones[zKey];
-        if (z.count > 15 && z.weight > 600) {
-          const boxX = Math.round(Math.max(0, z.minX * scaleX - 20));
-          const boxY = Math.round(Math.max(0, z.minY * scaleY - 20));
-          const boxW = Math.round(Math.min(vw - boxX, (z.maxX - z.minX) * scaleX + 40));
-          const boxH = Math.round(Math.min(vh - boxY, (z.maxY - z.minY) * scaleY + 40));
+        const estDistance = Number(Math.max(0.5, Math.min(4.5, 0.45 / Math.sqrt(Math.max(0.04, areaRatio)))).toFixed(1));
+        let urgency = 'info';
+        if (estDistance < 1.3) urgency = 'critical';
+        else if (estDistance < 2.5) urgency = 'warning';
 
-          const normX = (boxX + boxW / 2) / vw;
-          const pan = Number(((normX - 0.5) * 2).toFixed(2));
-
-          const areaRatio = (boxW * boxH) / (vw * vh);
-          const estDistance = Number(Math.max(0.6, Math.min(5.0, 0.45 / Math.sqrt(Math.max(0.04, areaRatio)))).toFixed(1));
-
-          let urgency = 'info';
-          if (estDistance < 1.4) urgency = 'critical';
-          else if (estDistance < 2.5) urgency = 'warning';
-
-          let label = 'OBSTACLE AHEAD';
-          if (areaRatio > 0.48) label = 'WALL / LARGE BARRIER';
-          else if (zKey === 'left') label = 'OBJECT ON LEFT';
-          else if (zKey === 'right') label = 'OBJECT ON RIGHT';
-
+        // Avoid adding duplicate overlapping boxes in same zone
+        const isDuplicate = detections.some(d => d.zone === zKey);
+        if (!isDuplicate) {
           detections.push({
-            id: `native_${zKey}`,
-            label,
-            score: Math.min(96, Math.round(65 + (z.weight / 50))),
+            id: `native_${detectedClass}_${zKey}`,
+            class: detectedClass,
+            label: detectedLabel,
+            score: Math.min(96, Math.round(72 + (z.weight / 40))),
             bbox: [boxX, boxY, boxW, boxH],
             zone: zKey,
+            direction: zKey,
             pan,
             distance: estDistance,
             urgency,
+            isWall: detectedClass === 'wall',
             timestamp: Date.now()
           });
         }
-      });
-    }
+      }
+    });
 
     const duration = Math.max(1, Math.round(performance.now() - startTime));
     this.lastLatencyMs = duration;
@@ -349,13 +367,16 @@ class VisionDetector {
 
       return {
         id: `${pred.class}_${Math.round(scaledX)}`,
+        class: pred.class.toLowerCase(),
         label: pred.class.toUpperCase(),
         score: Math.round(pred.score * 100),
         bbox: [scaledX, scaledY, scaledW, scaledH],
         zone,
+        direction: zone,
         pan,
         distance: estimatedMeters,
         urgency,
+        isWall: pred.class === 'wall',
         timestamp: Date.now()
       };
     });

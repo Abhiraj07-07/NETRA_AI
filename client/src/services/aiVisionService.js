@@ -95,20 +95,20 @@ Keep the description very practical and safety-focused. Do not mention that this
   // ===============================================================
   // 2. BUILT-IN OFFLINE AI SCENE SUMMARIZER (Zero Setup, 100% Free)
   // ===============================================================
-  // Uses detected bounding boxes, saliency contours, and wall depth
-  describeWithBuiltInAI(canvas) {
-    if (!canvas) return "Camera view is not ready.";
+  // Uses detected neural/heuristic bounding boxes, skin clusters, and wall depth
+  async describeWithBuiltInAI(canvas) {
+    if (!canvas) return "कैमरा व्यू तैयार नहीं है। कृपया कैमरा ऑन करें।";
 
-    const detected = visionDetector.detectObjects(canvas);
+    const detected = await visionDetector.detectObjects(canvas);
     const { width, height } = canvas;
 
     if (!detected || detected.length === 0) {
-      return "सामने का रास्ता पूरी तरह खाली और सुरक्षित है। कोई बाधा नहीं दिख रही है।";
+      return "सामने का रास्ता पूरी तरह साफ़ और सुरक्षित है। कोई रुकावट नहीं दिख रही है।";
     }
 
-    // Separate walls, people, and objects
-    const walls = detected.filter(d => d.isWall);
-    const objects = detected.filter(d => !d.isWall);
+    // Separate walls and objects
+    const walls = detected.filter(d => d.isWall || d.class === 'wall');
+    const objects = detected.filter(d => !d.isWall && d.class !== 'wall');
 
     const descriptions = [];
 
@@ -116,7 +116,8 @@ Keep the description very practical and safety-focused. Do not mention that this
     if (walls.length > 0) {
       const w = walls[0];
       const posLabel = w.direction === 'left' ? 'बाईं तरफ' : w.direction === 'right' ? 'दाहिनी तरफ' : 'बिल्कुल सामने';
-      descriptions.push(`${posLabel} ${w.distance || '1.5 मीटर'} पर दीवार है।`);
+      const dist = typeof w.distance === 'number' ? `${w.distance} मीटर` : (w.distance || '1 मीटर');
+      descriptions.push(`${posLabel} ${dist} पर दीवार है।`);
     }
 
     // 2. Group everyday objects by direction
@@ -127,14 +128,16 @@ Keep the description very practical and safety-focused. Do not mention that this
     objects.forEach(obj => {
       const centerX = obj.bbox[0] + obj.bbox[2] / 2;
       const ratio = centerX / width;
-      const name = this.translateObjectName(obj.class || 'obstacle');
+      const name = this.translateObjectName(obj.class || obj.label || 'obstacle');
+      const dist = typeof obj.distance === 'number' ? `${obj.distance}m` : '';
+      const formatted = dist ? `${name} (${dist})` : name;
 
       if (ratio < 0.35) {
-        leftObjects.push(name);
+        leftObjects.push(formatted);
       } else if (ratio > 0.65) {
-        rightObjects.push(name);
+        rightObjects.push(formatted);
       } else {
-        centerObjects.push(name);
+        centerObjects.push(formatted);
       }
     });
 
@@ -150,9 +153,9 @@ Keep the description very practical and safety-focused. Do not mention that this
 
     // Pathway assessment
     if (centerObjects.length === 0 && walls.filter(w => w.direction === 'center').length === 0) {
-      descriptions.push("आगे बढ़ने का रास्ता खाली है।");
+      descriptions.push("आगे बढ़ने का सीधा रास्ता खाली है, चल सकते हैं।");
     } else {
-      descriptions.push("कृपया संभलकर चलें।");
+      descriptions.push("सावधान रहें और धीरे चलें।");
     }
 
     return descriptions.join(' ');
@@ -217,7 +220,7 @@ Keep the description very practical and safety-focused. Do not mention that this
       // If Gemini wasn't used or failed, use built-in offline engine
       if (!finalDescription) {
         onStatusUpdate('लोकल AI इंजन से वस्तुओं की पहचान की जा रही है...');
-        finalDescription = this.describeWithBuiltInAI(canvas);
+        finalDescription = await this.describeWithBuiltInAI(canvas);
       }
 
       this.lastDescription = finalDescription;

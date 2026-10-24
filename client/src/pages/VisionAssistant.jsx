@@ -57,7 +57,10 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     table: 'मेज़',
     tv: 'टीवी',
     laptop: 'लैपटॉप',
-    cell_phone: 'फोन',
+    'cell phone': 'मोबाइल फोन',
+    cell_phone: 'मोबाइल फोन',
+    phone: 'मोबाइल फोन',
+    mobile: 'मोबाइल फोन',
     book: 'किताब',
     bottle: 'बोतल',
     cup: 'कप',
@@ -359,6 +362,8 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
 
   // AI Multimodal Scene & Object Description (Gemini Vision + Built-in Local AI)
   const handleDescribeScene = async () => {
+    // 1. Grab fresh live video frame into canvas for image analysis
+    copyVideoToCanvas();
     const canvas = canvasRef.current;
     if (!canvas || isAnalyzing) return;
     setIsAnalyzing(true);
@@ -377,13 +382,15 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
           engine: result.engine,
           time: new Date().toLocaleTimeString()
         });
+        setAiStatus(`AI: ${result.text.slice(0, 40)}...`);
+        speechService.speak(result.text, { priority: true });
         logAnnouncement(`[${result.engine}]: ${result.text}`, 'ai');
       }
     } catch (err) {
       console.error('AI scene describe error:', err);
+      speechService.speak("सामने वस्तुओं की पहचान में त्रुटि हुई। कृपया दोबारा प्रयास करें।", { priority: true });
     } finally {
       setIsAnalyzing(false);
-      setAiStatus('Active & Scanning Pathway');
     }
   };
 
@@ -399,7 +406,7 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
     }
 
     if (speechAnnounceEnabled) {
-      const cleanLabel = primary.label.toLowerCase();
+      const cleanLabel = (primary.class || primary.label || '').toLowerCase();
       let hiLabel = 'रुकावट';
       for (const [key, val] of Object.entries(OBSTACLE_NAMES_HI)) {
         if (cleanLabel.includes(key)) {
