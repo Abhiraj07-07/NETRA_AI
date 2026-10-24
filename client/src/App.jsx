@@ -15,6 +15,7 @@ import { speechService } from './services/speechService';
 import { batteryService } from './services/batteryService';
 import { smartAssistService } from './services/smartAssistService';
 import { api } from './services/api';
+import { audioService } from './services/audioService';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -208,6 +209,39 @@ export default function App() {
     socketService.on('battery:critical', (data) => {
       setActiveSOSCount(prev => prev + 1);
       setScreenReaderMessage(`Alert: Low battery alert (${data.level}%) broadcasted!`);
+    });
+
+    // Remote Parent / Guardian Actions
+    socketService.on('device:ring-buzzer', () => {
+      setScreenReaderMessage('Parent is ringing your device buzzer to locate you.');
+      speechService.speak("Parent is looking for you. Ringing buzzer.", { priority: true });
+      // Pulsing 1200Hz attention buzzer
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => audioService.playTone(1200, 0.4), i * 600);
+      }
+    });
+
+    socketService.on('device:speak-message', (data) => {
+      if (data && data.text) {
+        setScreenReaderMessage(`Parent Message: ${data.text}`);
+        speechService.speak(`Message from Parent: ${data.text}`, { priority: true });
+      }
+    });
+
+    socketService.on('device:request-location', () => {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          const loc = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            heading: pos.coords.heading || 0,
+            speed: pos.coords.speed || 0,
+            sharingActive: true
+          };
+          socketService.emit('location:broadcast', loc);
+        }, () => {});
+      }
     });
 
     return () => {

@@ -119,18 +119,28 @@ export default function Navbar({
             <Contrast className="w-5 h-5" />
           </button>
 
-          {/* Quick Family Guardian Link */}
+          {/* Dual Profile Switcher: Disabled Person 👤 ⟷ Parent/Guardian 🛡️ */}
           <button
-            onClick={() => setCurrentPage('family')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
+            onClick={() => setCurrentPage(currentPage === 'family' ? 'home' : 'family')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-xs ${
               currentPage === 'family' 
-                ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
-                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
+                ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md ring-2 ring-amber-400/50' 
+                : 'bg-sky-50 text-sky-900 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
             }`}
-            aria-label="Switch to Family Guardian Portal"
+            aria-label={currentPage === 'family' ? "Switch to Disabled Person Mode" : "Switch to Parent Access Panel"}
+            title={currentPage === 'family' ? "Return to Disabled Person Mode" : "Open Parent / Guardian Tracking Panel"}
           >
-            <Shield className="w-4 h-4 text-blue-600" />
-            <span className="hidden sm:inline">Family Portal</span>
+            {currentPage === 'family' ? (
+              <>
+                <User className="w-4 h-4 text-slate-950" />
+                <span>User Mode</span>
+              </>
+            ) : (
+              <>
+                <Shield className="w-4 h-4 text-sky-700 animate-pulse" />
+                <span className="font-extrabold">Parent Panel</span>
+              </>
+            )}
           </button>
           {/* User Profile & Settings Link */}
           <button

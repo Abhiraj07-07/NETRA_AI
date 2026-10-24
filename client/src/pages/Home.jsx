@@ -181,11 +181,11 @@ export default function Home({ onSelectPage, activeSOSCount, locationSharingActi
         {/* Tile 6: Family Guardian Dashboard */}
         <button
           onClick={() => onSelectPage('family')}
-          className="group relative bg-white/80 hover:bg-white/95 backdrop-blur-md border-2 border-white/90 hover:border-indigo-500 focus:border-indigo-500 focus:outline-none rounded-2xl p-6 transition-all hover:shadow-xl shadow-md flex flex-col justify-between text-left"
-          aria-label="Key 6: Family Guardian Portal. Real-time safety monitor for trusted contacts"
+          className="group relative bg-white/80 hover:bg-white/95 backdrop-blur-md border-2 border-white/90 hover:border-sky-500 focus:border-sky-500 focus:outline-none rounded-2xl p-6 transition-all hover:shadow-xl shadow-md flex flex-col justify-between text-left"
+          aria-label="Key 6: Parent and Guardian Access Portal. Real-time GPS location tracking, Geofence shield, and remote controls"
         >
           <div className="flex items-center justify-between mb-4">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-100 border border-indigo-300 flex items-center justify-center text-indigo-700 group-hover:scale-110 transition-transform shadow-xs">
+            <div className="w-14 h-14 rounded-2xl bg-sky-100 border border-sky-300 flex items-center justify-center text-sky-700 group-hover:scale-110 transition-transform shadow-xs">
               <ShieldCheck className="w-8 h-8" />
             </div>
             <span className="text-xs font-mono font-bold bg-white text-slate-800 px-2.5 py-1 rounded-md border border-slate-300 shadow-xs">
@@ -193,12 +193,18 @@ export default function Home({ onSelectPage, activeSOSCount, locationSharingActi
             </span>
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-950 mb-1 group-hover:text-indigo-700 transition-colors">
-              Family Guardian Portal
+            <h2 className="text-xl font-black text-slate-950 mb-1 group-hover:text-sky-700 transition-colors flex items-center gap-2">
+              Parent & Guardian Panel
+              <span className="text-[10px] bg-sky-200 text-sky-950 font-black px-1.5 py-0.5 rounded">PARENT ACCESS</span>
             </h2>
-            <p className="text-sm text-slate-700 font-medium">
-              Dedicated monitoring view for relatives to observe live location and handle SOS alarms.
+            <p className="text-sm text-slate-700 font-medium mb-2">
+              Real-time live GPS map, campus safe geofence alerts, remote find-me buzzer, and instant emergency alerts.
             </p>
+            <div className="flex flex-wrap gap-1.5 text-[11px] font-bold">
+              <span className="px-2 py-0.5 bg-sky-100 text-sky-900 rounded-md border border-sky-200">📍 Live GPS Tracking</span>
+              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 rounded-md border border-emerald-200">🛡️ Geofence 500m</span>
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-900 rounded-md border border-amber-200">🔊 Remote Buzzer</span>
+            </div>
           </div>
         </button>
       </div>

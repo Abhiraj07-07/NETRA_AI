@@ -498,6 +498,30 @@ io.on('connection', (socket) => {
     console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
+  // Relay Location updates from disabled companion device to parents
+  socket.on('location:broadcast', (loc) => {
+    if (loc) {
+      db.location = { ...db.location, ...loc, lastUpdated: new Date().toISOString() };
+      io.emit('location:update', db.location);
+    }
+  });
+
+  // Remote Parent Actions to Companion Device
+  socket.on('guardian:ring-buzzer', (payload) => {
+    console.log('[Guardian Action] Ringing loud buzzer on companion device...');
+    io.emit('device:ring-buzzer', payload || { duration: 3000 });
+  });
+
+  socket.on('guardian:voice-message', (data) => {
+    console.log('[Guardian Action] Voice message sent to user:', data?.text);
+    io.emit('device:speak-message', data || { text: 'Hello, your guardian sent a check-in message.' });
+  });
+
+  socket.on('guardian:request-location', () => {
+    console.log('[Guardian Action] Requested immediate GPS refresh from device.');
+    io.emit('device:request-location');
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
   });
