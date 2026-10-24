@@ -1,8 +1,6 @@
 import React from 'react';
-import { Eye, MapPin, Volume2, VolumeX, Contrast, Battery, BatteryCharging, AlertOctagon, Mic } from 'lucide-react';
+import { Eye, MapPin, Volume2, VolumeX, Contrast, Battery, BatteryCharging, Mic } from 'lucide-react';
 import { speechService } from '../services/speechService';
-import { audioService } from '../services/audioService';
-import { api } from '../services/api';
 
 export default function Navbar({ 
   currentPage, 
@@ -15,21 +13,6 @@ export default function Navbar({
   onToggleVoiceCommands,
   batteryState = { level: 95, isCharging: false }
 }) {
-  const handleQuickSOS = async () => {
-    audioService.playSiren(3);
-    speechService.speak("Emergency SOS triggered! Broadcasting your coordinates.", { priority: true });
-    try {
-      await api.triggerSOS({
-        type: 'navbar_panic',
-        lat: 26.8467,
-        lng: 80.9462,
-        address: 'DSMNRU Campus Main Gate'
-      });
-    } catch (e) {
-      console.warn('Quick SOS note:', e);
-    }
-  };
-
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-3 shadow-xs transition-colors">
       <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -97,17 +80,6 @@ export default function Navbar({
 
         {/* Global Controls & Status */}
         <div className="flex items-center gap-2">
-          {/* Quick Emergency SOS button */}
-          <button
-            onClick={handleQuickSOS}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-md shadow-red-600/30 transition-all active:scale-95"
-            title="Immediate Emergency SOS Broadcast"
-            aria-label="Immediate Emergency SOS Broadcast"
-          >
-            <AlertOctagon className="w-4 h-4" />
-            <span>SOS</span>
-          </button>
-
           {/* Battery Status */}
           <div
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border bg-slate-100 text-slate-700 border-slate-300"
@@ -147,7 +119,7 @@ export default function Navbar({
             title={isMuted ? "Audio is muted. Click to unmute." : "Mute speech audio"}
             aria-label={isMuted ? "Unmute audio" : "Mute audio"}
           >
-            {isMuted ? <VolumeX className="w-4 h-4 text-rose-600" /> : <Volume2 className="w-4 h-4 text-amber-600" />}
+            {isMuted ? <VolumeX className="w-5 h-5 text-rose-600" /> : <Volume2 className="w-5 h-5 text-amber-600" />}
           </button>
 
           {/* High Contrast Mode Switch */}

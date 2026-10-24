@@ -183,8 +183,8 @@ export default function App() {
         />
       </div>
 
-      {/* Main View Area */}
-      <main className="flex-1 w-full relative flex flex-col justify-start pb-20">
+      {/* Main View Area - Beautiful Background Image Applied to Page Content */}
+      <main className="flex-1 w-full relative flex flex-col justify-start netra-page-bg pb-20">
         <div className="relative z-10 max-w-6xl w-full mx-auto px-4 py-6 flex-1">
           {currentPage === 'home' && (
             <Home

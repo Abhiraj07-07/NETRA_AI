@@ -13,7 +13,7 @@ export default function Home({ onSelectPage, locationSharingActive = true }) {
   return (
     <div className="space-y-6 max-w-4xl mx-auto text-left">
       {/* Hero Welcome banner */}
-      <div className="bg-white/95 backdrop-blur-md border border-slate-200 rounded-3xl p-6 sm:p-8 text-left shadow-sm relative overflow-hidden">
+      <div className="bg-white/80 hover:bg-white/95 backdrop-blur-md border border-white/90 rounded-3xl p-6 sm:p-8 text-left shadow-md relative overflow-hidden transition-all">
         <div className="relative z-10 max-w-2xl">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100 border border-amber-300 text-amber-950 text-xs font-black mb-3">
             <Sparkles className="w-3.5 h-3.5 text-amber-700" />
@@ -87,7 +87,7 @@ export default function Home({ onSelectPage, locationSharingActive = true }) {
             speechService.speak("Opening Vision and Obstacle Detection", { priority: true });
             onSelectPage('vision');
           }}
-          className="group bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-amber-500 rounded-3xl p-6 transition-all hover:shadow-xl shadow-xs flex flex-col justify-between text-left min-h-[220px]"
+          className="group bg-white/80 hover:bg-white/95 backdrop-blur-md border-2 border-white/90 hover:border-amber-500 rounded-3xl p-6 transition-all hover:shadow-xl shadow-md flex flex-col justify-between text-left min-h-[220px]"
           aria-label="Key 1: Vision and Obstacle Detection"
         >
           <div>
@@ -119,7 +119,7 @@ export default function Home({ onSelectPage, locationSharingActive = true }) {
             speechService.speak("Opening Live Location Tracking", { priority: true });
             onSelectPage('location');
           }}
-          className="group bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-sky-500 rounded-3xl p-6 transition-all hover:shadow-xl shadow-xs flex flex-col justify-between text-left min-h-[220px]"
+          className="group bg-white/80 hover:bg-white/95 backdrop-blur-md border-2 border-white/90 hover:border-sky-500 rounded-3xl p-6 transition-all hover:shadow-xl shadow-md flex flex-col justify-between text-left min-h-[220px]"
           aria-label="Key 2: Live GPS Location Tracking"
         >
           <div>
