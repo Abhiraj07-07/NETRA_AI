@@ -4,42 +4,32 @@ import ScreenReaderAnnouncer from './components/ScreenReaderAnnouncer';
 import VoiceAssistantBanner from './components/VoiceAssistantBanner';
 import Home from './pages/Home';
 import VisionAssistant from './pages/VisionAssistant';
-import VoicePage from './pages/VoicePage';
-import SOSPage from './pages/SOSPage';
 import LocationSharing from './pages/LocationSharing';
-import HazardMap from './pages/HazardMap';
-import FamilyDashboard from './pages/FamilyDashboard';
-import Settings from './pages/Settings';
 import { socketService } from './services/socketService';
 import { speechService } from './services/speechService';
 import { batteryService } from './services/batteryService';
-import { smartAssistService } from './services/smartAssistService';
 import { api } from './services/api';
-import { audioService } from './services/audioService';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
-  const [visionMode, setVisionMode] = useState('obstacles');
   const [highContrast, setHighContrast] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [activeSOSCount, setActiveSOSCount] = useState(0);
   const [locationSharingActive, setLocationSharingActive] = useState(true);
   const [screenReaderMessage, setScreenReaderMessage] = useState('Welcome to NETRA AI. Ready.');
   const [lastHeardVoice, setLastHeardVoice] = useState('');
   const [voiceActionFeedback, setVoiceActionFeedback] = useState('');
-  const [batteryState, setBatteryState] = useState({ level: 95, isCharging: false, isLow: false });
+  const [batteryState, setBatteryState] = useState({ level: 95, isCharging: false });
 
   const currentPageRef = useRef(currentPage);
   useEffect(() => {
     currentPageRef.current = currentPage;
   }, [currentPage]);
 
-  // Handle Natural Language Voice Intents (English, Hinglish & Hindi)
+  // Handle Natural Language Voice Intents
   const handleIntentCommand = useCallback((intentObj, rawText) => {
     if (!intentObj) return;
-    const { intent, speech, feedback, turnOn } = intentObj;
-    console.log('[Global Voice Intent Triggered]:', intent, rawText);
+    const { intent, speech, feedback } = intentObj;
     setLastHeardVoice(rawText || speech);
     if (feedback) setVoiceActionFeedback(feedback);
 
@@ -47,38 +37,21 @@ export default function App() {
     window.dispatchEvent(new CustomEvent('netra:voice-intent', { detail: intentObj }));
 
     switch (intent) {
-      case 'MEDICINE_OCR':
-        setVisionMode('ocr');
-        setCurrentPage('vision');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'COLOR':
-        setVisionMode('color');
-        setCurrentPage('vision');
-        speechService.speak(speech, { priority: true });
-        break;
-
       case 'WALK_START':
       case 'VISION_RADAR':
       case 'CAMERA_START':
-        setVisionMode('obstacles');
+      case 'DESCRIBE_SCENE':
         setCurrentPage('vision');
-        speechService.speak(speech || "NETRA walking guide active. Camera and obstacle radar started. Walk forward safely.", { priority: true });
+        speechService.speak(speech || "NETRA walking guide active. Camera and obstacle radar started.", { priority: true });
         break;
 
-      case 'VOICE_PAGE':
-        setCurrentPage('voice');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'CAMERA_STOP':
-        speechService.speak(speech, { priority: true });
+      case 'LOCATION':
+        setCurrentPage('location');
+        speechService.speak(speech || "Opening Live GPS Location Tracker.", { priority: true });
         break;
 
       case 'SOS_TRIGGER':
-        setCurrentPage('sos');
-        speechService.speak(speech, { priority: true });
+        speechService.speak("Emergency SOS triggered! Broadcasting your coordinates.", { priority: true });
         api.triggerSOS({
           type: 'voice_command',
           lat: 26.8467,
@@ -87,167 +60,51 @@ export default function App() {
         }).catch(console.error);
         break;
 
-      case 'SEND_SMS':
-      case 'SEND_WHATSAPP':
-        setCurrentPage('sos');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'LOCATION':
-        setCurrentPage('location');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'HAZARDS':
-        setCurrentPage('hazards');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'FAMILY':
-        setCurrentPage('family');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'SETTINGS':
-        setCurrentPage('settings');
-        speechService.speak(speech, { priority: true });
-        break;
-
       case 'HOME':
         setCurrentPage('home');
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'TORCH':
-        speechService.speak(speech, { priority: true });
-        smartAssistService.setTorch(turnOn);
+        speechService.speak(speech || "Returned to Home screen.", { priority: true });
         break;
 
       case 'MUTE':
         setIsMuted(true);
-        speechService.speak(speech, { priority: true });
+        speechService.speak("Audio muted.", { priority: true });
         break;
 
       case 'UNMUTE':
         setIsMuted(false);
-        speechService.speak(speech, { priority: true });
+        speechService.speak("Audio unmuted.", { priority: true });
         break;
 
-      case 'READ_SCREEN': {
-        const pageDesc = {
-          home: "You are on the Home screen. Say Medicine, Color, Vision, SOS, Location, Hazards, or Family.",
-          vision: "You are on Vision Assistant. Real-time scanning is active.",
-          sos: "You are on Panic SOS. Immediate siren and SMS GPS dispatch available.",
-          location: "You are on Live Location Sharing. Streaming GPS to guardians.",
-          hazards: "You are on Hazard Map. Displays road hazards and obstacles.",
-          family: "You are on Family Portal. Guard monitors user safety in real time.",
-          voice: "You are on Voice Guidance and hands-free command center.",
-          settings: "You are on Settings. Configure voice rate and profile."
-        }[currentPageRef.current] || "Welcome to NETRA AI.";
-        speechService.speak(pageDesc, { priority: true });
-        break;
-      }
-
-      case 'HELP':
-        speechService.speak(speech, { priority: true });
-        break;
-
-      case 'UNKNOWN':
       default:
-        speechService.speak(speech || `Heard: "${rawText}". Say Camera, Describe Scene, Medicine, or SOS.`);
         break;
     }
-  }, []); // Stable [] dependency array
+  }, []);
 
-  // Handle direct spoken text wrapper
   const handleVoiceCommand = useCallback((spokenText) => {
     const parsed = speechService.parseIntent(spokenText);
     handleIntentCommand(parsed, spokenText);
   }, [handleIntentCommand]);
 
-  // Initialize socket & check initial health / active SOS
+  // Initialize socket & listeners
   useEffect(() => {
     socketService.connect();
 
-    socketService.on('init:state', (state) => {
-      if (state && state.activeSOS) {
-        setActiveSOSCount(state.activeSOS.length);
-      }
-    });
-
-    socketService.on('sos:alert', () => {
-      setActiveSOSCount(prev => prev + 1);
-      setScreenReaderMessage('Emergency alert dispatched!');
-    });
-
-    socketService.on('sos:resolved', () => {
-      setActiveSOSCount(prev => Math.max(0, prev - 1));
-      setScreenReaderMessage('Emergency alert resolved.');
-    });
-
-    // Check backend health
     api.getHealth().catch(() => {
       console.warn('Backend server connecting...');
     });
 
-    // Register global voice intent listener
     const unsubscribeIntent = speechService.addIntentListener(handleIntentCommand);
     const unsubscribeState = speechService.addStateListener(setIsListening);
-
-    // Register battery service listener & critical low battery alerts
     const unsubscribeBattery = batteryService.addStateListener(setBatteryState);
-    const unsubscribeBatteryAlert = batteryService.addAlertListener((info) => {
-      setActiveSOSCount(prev => prev + 1);
-      setScreenReaderMessage(`CRITICAL WARNING: Device battery at ${info.level}%. Emergency GPS location automatically sent to contacts.`);
-    });
-
-    socketService.on('battery:critical', (data) => {
-      setActiveSOSCount(prev => prev + 1);
-      setScreenReaderMessage(`Alert: Low battery alert (${data.level}%) broadcasted!`);
-    });
-
-    // Remote Parent / Guardian Actions
-    socketService.on('device:ring-buzzer', () => {
-      setScreenReaderMessage('Parent is ringing your device buzzer to locate you.');
-      speechService.speak("Parent is looking for you. Ringing buzzer.", { priority: true });
-      // Pulsing 1200Hz attention buzzer
-      for (let i = 0; i < 4; i++) {
-        setTimeout(() => audioService.playTone(1200, 0.4), i * 600);
-      }
-    });
-
-    socketService.on('device:speak-message', (data) => {
-      if (data && data.text) {
-        setScreenReaderMessage(`Parent Message: ${data.text}`);
-        speechService.speak(`Message from Parent: ${data.text}`, { priority: true });
-      }
-    });
-
-    socketService.on('device:request-location', () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          const loc = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy: pos.coords.accuracy,
-            heading: pos.coords.heading || 0,
-            speed: pos.coords.speed || 0,
-            sharingActive: true
-          };
-          socketService.emit('location:broadcast', loc);
-        }, () => {});
-      }
-    });
 
     return () => {
       unsubscribeIntent();
       unsubscribeState();
       unsubscribeBattery();
-      unsubscribeBatteryAlert();
     };
   }, [handleIntentCommand]);
 
-  // Update high contrast class on HTML body
+  // High contrast mode
   useEffect(() => {
     if (highContrast) {
       document.body.classList.add('high-contrast');
@@ -256,15 +113,14 @@ export default function App() {
     }
   }, [highContrast]);
 
-  // Sync mute state to speechService
+  // Sync mute state
   useEffect(() => {
     speechService.setMuted(isMuted);
   }, [isMuted]);
 
-  // Accessible Keyboard Navigation (Keys 1-6, V for Voice, and Escape)
+  // Global Keyboard Shortcuts (Key 1, Key 2, Key V, Escape)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Ignore if user is currently typing in an input or textarea
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
 
       if (e.key === 'v' || e.key === 'V') {
@@ -275,31 +131,15 @@ export default function App() {
       switch (e.key) {
         case '1':
           setCurrentPage('vision');
-          speechService.speak("Opening Vision Assistant");
+          speechService.speak("Opening Vision and Obstacle Detection", { priority: true });
           break;
         case '2':
-          setCurrentPage('voice');
-          speechService.speak("Opening Voice Assistant");
-          break;
-        case '3':
-          setCurrentPage('sos');
-          speechService.speak("Opening Panic SOS");
-          break;
-        case '4':
           setCurrentPage('location');
-          speechService.speak("Opening Location Sharing");
-          break;
-        case '5':
-          setCurrentPage('hazards');
-          speechService.speak("Opening Hazard Map");
-          break;
-        case '6':
-          setCurrentPage('family');
-          speechService.speak("Opening Family Portal");
+          speechService.speak("Opening Live Location Tracking", { priority: true });
           break;
         case 'Escape':
           setCurrentPage('home');
-          speechService.speak("Returned to Home Screen");
+          speechService.speak("Returned to Home Screen", { priority: true });
           break;
         default:
           break;
@@ -310,7 +150,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isListening]);
 
-  // Toggle Global Voice Commands
+  // Toggle Voice Commands
   const handleToggleVoiceCommands = () => {
     if (isListening) {
       speechService.stopListening();
@@ -318,7 +158,7 @@ export default function App() {
       setVoiceActionFeedback("Voice control paused");
     } else {
       speechService.startListening();
-      speechService.speak("Voice control active. You can speak commands in English or Hindi.", { priority: true });
+      speechService.speak("Voice control active. You can speak 'Start', 'Vision', 'Location', or 'Describe'.", { priority: true });
       setVoiceActionFeedback("Voice control active (Listening)");
     }
   };
@@ -328,7 +168,7 @@ export default function App() {
       {/* Screen Reader Live Region */}
       <ScreenReaderAnnouncer announcement={screenReaderMessage} />
 
-      {/* Top Accessible Navbar - Clean solid white (NEVER uses background image) */}
+      {/* Top Accessible Navbar */}
       <div className="bg-white border-b border-slate-200 z-30 shadow-xs sticky top-0">
         <Navbar
           currentPage={currentPage}
@@ -337,39 +177,23 @@ export default function App() {
           setHighContrast={setHighContrast}
           isMuted={isMuted}
           setIsMuted={setIsMuted}
-          activeSOSCount={activeSOSCount}
           isListening={isListening}
           onToggleVoiceCommands={handleToggleVoiceCommands}
           batteryState={batteryState}
         />
       </div>
 
-      {/* Main View - Background image strictly inside page area, auto-adjustable to device screen */}
-      <main 
-        className="flex-1 w-full relative flex flex-col justify-start netra-page-bg pb-20"
-      >
+      {/* Main View Area */}
+      <main className="flex-1 w-full relative flex flex-col justify-start pb-20">
         <div className="relative z-10 max-w-6xl w-full mx-auto px-4 py-6 flex-1">
           {currentPage === 'home' && (
             <Home
               onSelectPage={setCurrentPage}
-              activeSOSCount={activeSOSCount}
               locationSharingActive={locationSharingActive}
             />
           )}
           {currentPage === 'vision' && (
-            <VisionAssistant onBack={() => setCurrentPage('home')} initialMode={visionMode} />
-          )}
-          {currentPage === 'voice' && (
-            <VoicePage
-              onBack={() => setCurrentPage('home')}
-              onExecuteCommand={setCurrentPage}
-            />
-          )}
-          {currentPage === 'sos' && (
-            <SOSPage
-              onBack={() => setCurrentPage('home')}
-              onSOSDispatched={() => setActiveSOSCount(prev => prev + 1)}
-            />
+            <VisionAssistant onBack={() => setCurrentPage('home')} />
           )}
           {currentPage === 'location' && (
             <LocationSharing
@@ -378,23 +202,10 @@ export default function App() {
               setSharingActive={setLocationSharingActive}
             />
           )}
-          {currentPage === 'hazards' && (
-            <HazardMap onBack={() => setCurrentPage('home')} />
-          )}
-          {currentPage === 'family' && (
-            <FamilyDashboard onBack={() => setCurrentPage('home')} />
-          )}
-          {currentPage === 'settings' && (
-            <Settings
-              onBack={() => setCurrentPage('home')}
-              highContrast={highContrast}
-              setHighContrast={setHighContrast}
-            />
-          )}
         </div>
       </main>
 
-      {/* Floating Global Hands-Free Voice Assistant Bar */}
+      {/* Hands-Free Voice Assistant Bar */}
       <VoiceAssistantBanner
         isListening={isListening}
         onToggleListening={handleToggleVoiceCommands}
@@ -404,7 +215,7 @@ export default function App() {
         onExecuteCommand={handleVoiceCommand}
       />
 
-      {/* Bottom Accessible Status Footer - Clean solid white (NEVER uses background image) */}
+      {/* Bottom Status Footer */}
       <footer className="border-t border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 text-center font-medium shadow-xs z-30">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -412,12 +223,8 @@ export default function App() {
           </div>
           <div className="flex items-center gap-3 text-[11px] font-mono text-slate-600 font-bold">
             <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">[V] Voice Mic</span>
-            <span>[1] Vision</span>
-            <span>[2] Voice</span>
-            <span>[3] SOS</span>
-            <span>[4] GPS</span>
-            <span>[5] Hazards</span>
-            <span>[6] Family</span>
+            <span>[1] Vision Detection</span>
+            <span>[2] Live Location</span>
             <span>[Esc] Home</span>
           </div>
         </div>

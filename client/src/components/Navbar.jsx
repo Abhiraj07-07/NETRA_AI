@@ -1,5 +1,8 @@
 import React from 'react';
-import { Eye, Shield, Volume2, VolumeX, Contrast, Radio, Battery, BatteryCharging, BatteryWarning, User } from 'lucide-react';
+import { Eye, MapPin, Volume2, VolumeX, Contrast, Battery, BatteryCharging, AlertOctagon, Mic } from 'lucide-react';
+import { speechService } from '../services/speechService';
+import { audioService } from '../services/audioService';
+import { api } from '../services/api';
 
 export default function Navbar({ 
   currentPage, 
@@ -8,11 +11,25 @@ export default function Navbar({
   setHighContrast, 
   isMuted, 
   setIsMuted, 
-  activeSOSCount,
   isListening,
   onToggleVoiceCommands,
-  batteryState = { level: 95, isCharging: false, isLow: false }
+  batteryState = { level: 95, isCharging: false }
 }) {
+  const handleQuickSOS = async () => {
+    audioService.playSiren(3);
+    speechService.speak("Emergency SOS triggered! Broadcasting your coordinates.", { priority: true });
+    try {
+      await api.triggerSOS({
+        type: 'navbar_panic',
+        lat: 26.8467,
+        lng: 80.9462,
+        address: 'DSMNRU Campus Main Gate'
+      });
+    } catch (e) {
+      console.warn('Quick SOS note:', e);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 py-3 shadow-xs transition-colors">
       <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
@@ -30,65 +47,93 @@ export default function Navbar({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-logo tracking-wide text-slate-900">NETRA <span className="text-amber-600">AI</span></span>
-              <span className="text-[10px] uppercase font-bold tracking-widest bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full border border-amber-300">
+              <span className="text-2xl font-black tracking-wide text-slate-900">NETRA <span className="text-amber-600">AI</span></span>
+              <span className="text-[10px] uppercase font-bold tracking-widest bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-300">
                 SPIRIT 3.0
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium">Team UNTAMED • Assistive Vision Companion</p>
+            <p className="text-[11px] text-slate-500 font-medium">Obstacle Detection & Live Location</p>
           </div>
+        </div>
+
+        {/* Primary Feature Tabs */}
+        <div className="flex items-center gap-2">
+          {/* Vision Detection Tab */}
+          <button
+            onClick={() => {
+              speechService.speak("Opening Vision Detection");
+              setCurrentPage('vision');
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all flex items-center gap-2 shadow-xs ${
+              currentPage === 'vision'
+                ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md shadow-amber-500/20'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+            title="Obstacle Detection Camera [Key 1]"
+            aria-label="Obstacle Detection Camera [Key 1]"
+          >
+            <Eye className="w-4 h-4" />
+            <span>1. Vision Detection</span>
+          </button>
+
+          {/* Live Location Tab */}
+          <button
+            onClick={() => {
+              speechService.speak("Opening Live Location Tracker");
+              setCurrentPage('location');
+            }}
+            className={`px-3.5 py-2 rounded-xl text-xs font-black border transition-all flex items-center gap-2 shadow-xs ${
+              currentPage === 'location'
+                ? 'bg-sky-600 text-white border-sky-700 shadow-md shadow-sky-600/20'
+                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+            }`}
+            title="Live GPS Location Tracker [Key 2]"
+            aria-label="Live GPS Location Tracker [Key 2]"
+          >
+            <MapPin className="w-4 h-4" />
+            <span>2. Live Location</span>
+          </button>
         </div>
 
         {/* Global Controls & Status */}
         <div className="flex items-center gap-2">
-          {/* Active SOS Warning Pill */}
-          {activeSOSCount > 0 && (
-            <button
-              onClick={() => setCurrentPage('sos')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 text-white font-bold text-xs animate-pulse shadow-md shadow-red-600/30"
-              aria-label="Active SOS Emergency Alert in progress. Click to view."
-            >
-              <Radio className="w-4 h-4" />
-              <span>SOS ACTIVE ({activeSOSCount})</span>
-            </button>
-          )}
-
-          {/* Battery Status Indicator & Low Battery (<10%) Alert Pill */}
+          {/* Quick Emergency SOS button */}
           <button
-            onClick={() => setCurrentPage('sos')}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
-              batteryState.level <= 10 && !batteryState.isCharging
-                ? 'bg-red-600 text-white border-red-700 animate-pulse shadow-md shadow-red-600/30'
-                : batteryState.level <= 20
-                  ? 'bg-amber-100 text-amber-900 border-amber-300'
-                  : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-            }`}
-            title={batteryState.level <= 10 ? "CRITICAL: Battery <= 10%! Auto-SOS message dispatched" : `Device Battery: ${batteryState.level}%`}
-            aria-label={`Battery level ${batteryState.level} percent`}
+            onClick={handleQuickSOS}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-black text-xs shadow-md shadow-red-600/30 transition-all active:scale-95"
+            title="Immediate Emergency SOS Broadcast"
+            aria-label="Immediate Emergency SOS Broadcast"
+          >
+            <AlertOctagon className="w-4 h-4" />
+            <span>SOS</span>
+          </button>
+
+          {/* Battery Status */}
+          <div
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold border bg-slate-100 text-slate-700 border-slate-300"
+            title={`Device Battery: ${batteryState.level}%`}
           >
             {batteryState.isCharging ? (
               <BatteryCharging className="w-4 h-4 text-emerald-600" />
-            ) : batteryState.level <= 10 ? (
-              <BatteryWarning className="w-4 h-4 text-white animate-bounce" />
             ) : (
               <Battery className="w-4 h-4 text-slate-700" />
             )}
             <span>{batteryState.level}%</span>
-          </button>
+          </div>
 
           {/* Voice Command Mic Pill */}
           <button
             onClick={onToggleVoiceCommands}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border transition-all ${
               isListening 
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-400 animate-pulse font-bold' 
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-400 animate-pulse' 
                 : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
             }`}
-            title="Toggle Hands-Free Voice Commands"
-            aria-label={isListening ? "Voice commands active, listening" : "Start hands-free voice commands"}
+            title="Toggle Hands-Free Voice Commands [V key]"
+            aria-label="Toggle Voice Commands"
           >
-            <span className={`w-2 h-2 rounded-full ${isListening ? 'bg-emerald-600' : 'bg-slate-400'}`} />
-            <span>{isListening ? 'Voice Active' : 'Enable Voice'}</span>
+            <Mic className="w-4 h-4" />
+            <span>{isListening ? 'Listening' : 'Voice [V]'}</span>
           </button>
 
           {/* Audio Speech Mute / Unmute */}
@@ -99,10 +144,10 @@ export default function Navbar({
                 ? 'bg-rose-50 text-rose-700 border-rose-300' 
                 : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
             }`}
-            title={isMuted ? "Audio speech is muted. Click to unmute." : "Mute speech audio"}
-            aria-label={isMuted ? "Unmute speech audio" : "Mute speech audio"}
+            title={isMuted ? "Audio is muted. Click to unmute." : "Mute speech audio"}
+            aria-label={isMuted ? "Unmute audio" : "Mute audio"}
           >
-            {isMuted ? <VolumeX className="w-5 h-5 text-rose-600" /> : <Volume2 className="w-5 h-5 text-amber-600" />}
+            {isMuted ? <VolumeX className="w-4 h-4 text-rose-600" /> : <Volume2 className="w-4 h-4 text-amber-600" />}
           </button>
 
           {/* High Contrast Mode Switch */}
@@ -113,48 +158,10 @@ export default function Navbar({
                 ? 'bg-black text-yellow-300 border-black font-black' 
                 : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
             }`}
-            title="Toggle High Contrast for Visually Impaired Navigation"
+            title="Toggle High Contrast Mode"
             aria-label="Toggle High Contrast mode"
           >
-            <Contrast className="w-5 h-5" />
-          </button>
-
-          {/* Dual Profile Switcher: Disabled Person 👤 ⟷ Parent/Guardian 🛡️ */}
-          <button
-            onClick={() => setCurrentPage(currentPage === 'family' ? 'home' : 'family')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 shadow-xs ${
-              currentPage === 'family' 
-                ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md ring-2 ring-amber-400/50' 
-                : 'bg-sky-50 text-sky-900 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
-            }`}
-            aria-label={currentPage === 'family' ? "Switch to Disabled Person Mode" : "Switch to Parent Access Panel"}
-            title={currentPage === 'family' ? "Return to Disabled Person Mode" : "Open Parent / Guardian Tracking Panel"}
-          >
-            {currentPage === 'family' ? (
-              <>
-                <User className="w-4 h-4 text-slate-950" />
-                <span>User Mode</span>
-              </>
-            ) : (
-              <>
-                <Shield className="w-4 h-4 text-sky-700 animate-pulse" />
-                <span className="font-extrabold">Parent Panel</span>
-              </>
-            )}
-          </button>
-          {/* User Profile & Settings Link */}
-          <button
-            onClick={() => setCurrentPage('settings')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
-              currentPage === 'settings' 
-                ? 'bg-amber-500 text-slate-950 font-bold border-amber-500 shadow-sm' 
-                : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
-            }`}
-            aria-label="Edit User Profile and Settings"
-            title="User Profile & Settings"
-          >
-            <User className="w-4 h-4 text-amber-700" />
-            <span className="hidden sm:inline">Profile</span>
+            <Contrast className="w-4 h-4" />
           </button>
         </div>
       </div>
