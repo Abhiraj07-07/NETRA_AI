@@ -103,7 +103,7 @@ Keep the description very practical and safety-focused. Do not mention that this
     const { width, height } = canvas;
 
     if (!detected || detected.length === 0) {
-      return "सामने का रास्ता पूरी तरह साफ़ और सुरक्षित है। कोई रुकावट नहीं दिख रही है।";
+      return "Pathway is completely clear ahead. Samne ka rasta saaf hai.";
     }
 
     // Separate walls and objects
@@ -115,9 +115,10 @@ Keep the description very practical and safety-focused. Do not mention that this
     // 1. Wall alert if present
     if (walls.length > 0) {
       const w = walls[0];
-      const posLabel = w.direction === 'left' ? 'बाईं तरफ' : w.direction === 'right' ? 'दाहिनी तरफ' : 'बिल्कुल सामने';
-      const dist = typeof w.distance === 'number' ? `${w.distance} मीटर` : (w.distance || '1 मीटर');
-      descriptions.push(`${posLabel} ${dist} पर दीवार है।`);
+      const posLabel = w.direction === 'left' ? 'on left' : w.direction === 'right' ? 'on right' : 'ahead';
+      const posHindi = w.direction === 'left' ? 'left taraf' : w.direction === 'right' ? 'right taraf' : 'samne';
+      const dist = typeof w.distance === 'number' ? `${w.distance} meters` : (w.distance || '1 meter');
+      descriptions.push(`Wall ${posLabel} at ${dist}. ${posHindi} deewar hai.`);
     }
 
     // 2. Group everyday objects by direction
@@ -127,7 +128,7 @@ Keep the description very practical and safety-focused. Do not mention that this
 
     objects.forEach(obj => {
       const centerX = obj.bbox[0] + obj.bbox[2] / 2;
-      const ratio = centerX / width;
+      const ratio = centerX / (width || 640);
       const name = this.translateObjectName(obj.class || obj.label || 'obstacle');
       const dist = typeof obj.distance === 'number' ? `${obj.distance}m` : '';
       const formatted = dist ? `${name} (${dist})` : name;
@@ -142,51 +143,63 @@ Keep the description very practical and safety-focused. Do not mention that this
     });
 
     if (centerObjects.length > 0) {
-      descriptions.push(`सामने ${[...new Set(centerObjects)].join(' और ')} दिखाई दे रहा है।`);
+      descriptions.push(`Ahead: ${[...new Set(centerObjects)].join(', ')}. Samne dikh raha hai.`);
     }
     if (leftObjects.length > 0) {
-      descriptions.push(`बाईं तरफ ${[...new Set(leftObjects)].join(' और ')} है।`);
+      descriptions.push(`On left: ${[...new Set(leftObjects)].join(', ')}. Left taraf hai.`);
     }
     if (rightObjects.length > 0) {
-      descriptions.push(`दाहिनी तरफ ${[...new Set(rightObjects)].join(' और ')} है।`);
+      descriptions.push(`On right: ${[...new Set(rightObjects)].join(', ')}. Right taraf hai.`);
     }
 
     // Pathway assessment
     if (centerObjects.length === 0 && walls.filter(w => w.direction === 'center').length === 0) {
-      descriptions.push("आगे बढ़ने का सीधा रास्ता खाली है, चल सकते हैं।");
+      descriptions.push("Pathway is clear to walk forward. Rasta saaf hai.");
     } else {
-      descriptions.push("सावधान रहें और धीरे चलें।");
+      descriptions.push("Please walk carefully. Savdhaan rahein.");
     }
 
     return descriptions.join(' ');
   }
 
-  // Friendly Hindi names for common objects
+  // Friendly names for common objects
   translateObjectName(engName) {
     const map = {
-      person: 'व्यक्ति',
-      chair: 'कुर्सी',
-      couch: 'सोफा',
-      table: 'मेज',
-      desk: 'डेस्क',
-      bottle: 'पानी की बोतल',
-      cup: 'कप',
-      'cell phone': 'मोबाइल फोन',
-      laptop: 'लैपटॉप',
-      backpack: 'बैग',
-      handbag: 'हैंडबैग',
-      door: 'दरवाजा',
-      stairs: 'सीढ़ियां',
-      bed: 'बिस्तर',
-      tv: 'टीवी',
-      car: 'गाड़ी',
-      motorcycle: 'बाइक',
-      bicycle: 'साइकिल',
-      dog: 'कुत्ता',
-      cat: 'बिल्ली',
-      obstacle: 'सामान'
+      person: 'Person (vyakti)',
+      chair: 'Chair (kursi)',
+      couch: 'Sofa',
+      table: 'Table (mez)',
+      desk: 'Desk',
+      bottle: 'Bottle (botal)',
+      cup: 'Cup',
+      'cell phone': 'Mobile phone',
+      cell_phone: 'Mobile phone',
+      phone: 'Mobile phone',
+      laptop: 'Laptop',
+      backpack: 'Bag',
+      handbag: 'Handbag',
+      door: 'Door (darwaza)',
+      stairs: 'Stairs (seedhiyan)',
+      bed: 'Bed',
+      tv: 'TV',
+      car: 'Car (gaadi)',
+      motorcycle: 'Motorcycle (bike)',
+      bicycle: 'Bicycle (cycle)',
+      dog: 'Dog (kutta)',
+      cat: 'Cat (billi)',
+      wall: 'Wall (deewar)',
+      obstacle: 'Obstacle (rukawat)'
     };
-    return map[engName.toLowerCase()] || engName;
+    return map[(engName || '').toLowerCase()] || engName;
+  }
+
+  // Shortcut alias for describeScene
+  async describeScene(canvas) {
+    const res = await this.analyzeAndDescribeScene(canvas);
+    return {
+      description: res?.text || "Pathway is clear ahead.",
+      spokenText: res?.text || "Pathway is clear ahead."
+    };
   }
 
   // ===============================================================

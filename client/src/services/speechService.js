@@ -136,7 +136,13 @@ class SpeechService {
 
     const now = Date.now();
 
-    // Throttle check: Prevent 45 FPS flooding. If not priority, do NOT speak if minIntervalMs hasn't passed OR if synth is already speaking!
+    // Deadlock detection & recovery:
+    // If Chrome claims it is speaking, but more than 3.5 seconds have elapsed, cancel the stalled queue
+    if (this.synth.speaking && (now - this.lastSpokenTime > 3500)) {
+      try { this.synth.cancel(); } catch (e) {}
+    }
+
+    // Throttle check: Prevent 45 FPS flooding
     if (!priority) {
       if (now - this.lastSpokenTime < minIntervalMs) {
         return;
@@ -162,7 +168,7 @@ class SpeechService {
       utterance.pitch = this.pitch || 1.0;
       utterance.lang = lang || this.currentLanguage;
 
-      // Keep utterance in Set to prevent Chrome V8 GC bug
+      // Keep utterance in Set to prevent Chrome V8 Garbage-Collection bug
       if (!this.activeUtterances) {
         this.activeUtterances = new Set();
       }

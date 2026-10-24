@@ -36,38 +36,38 @@ export default function VisionAssistant({ onBack }) {
 
   // Accessible bilingual obstacle & directional names
   const OBSTACLE_NAMES_HI = {
-    person: 'व्यक्ति',
-    bicycle: 'साइकिल',
-    car: 'गाड़ी',
-    motorcycle: 'बाइक',
-    bus: 'बस',
-    truck: 'ट्रक',
-    bench: 'बेंच',
-    chair: 'कुर्सी',
-    couch: 'सोफा',
-    potted_plant: 'गमला / पौधा',
-    bed: 'बिस्तर',
-    dining_table: 'मेज़',
-    table: 'मेज़',
-    tv: 'टीवी',
-    laptop: 'लैपटॉप',
-    'cell phone': 'मोबाइल फोन',
-    cell_phone: 'मोबाइल फोन',
-    phone: 'मोबाइल फोन',
-    mobile: 'मोबाइल फोन',
-    book: 'किताब',
-    bottle: 'बोतल',
-    cup: 'कप',
-    door: 'दरवाज़ा',
-    stairs: 'सीढ़ियां',
-    wall: 'दीवार',
-    obstacle: 'रुकावट'
+    person: 'vyakti',
+    bicycle: 'cycle',
+    car: 'gaadi',
+    motorcycle: 'bike',
+    bus: 'bus',
+    truck: 'truck',
+    bench: 'bench',
+    chair: 'kursi',
+    couch: 'sofa',
+    potted_plant: 'gamla',
+    bed: 'bistar',
+    dining_table: 'mez',
+    table: 'mez',
+    tv: 'TV screen',
+    laptop: 'laptop screen',
+    'cell phone': 'mobile phone',
+    cell_phone: 'mobile phone',
+    phone: 'mobile phone',
+    mobile: 'mobile phone',
+    book: 'kitaab',
+    bottle: 'botal',
+    cup: 'cup',
+    door: 'darwaza',
+    stairs: 'seedhiyan',
+    wall: 'deewar',
+    obstacle: 'rukawat'
   };
 
   const ZONE_MAPPING = {
-    center: { en: 'directly ahead', hi: 'सामने' },
-    left: { en: 'on your left', hi: 'बाईं तरफ' },
-    right: { en: 'on your right', hi: 'दाईं तरफ' }
+    center: { en: 'directly ahead', hi: 'samne' },
+    left: { en: 'on your left', hi: 'left taraf' },
+    right: { en: 'on your right', hi: 'right taraf' }
   };
 
   // Start Camera Stream
@@ -208,90 +208,95 @@ export default function VisionAssistant({ onBack }) {
           isProcessingRef.current = true;
           const startTime = performance.now();
 
-          // Ensure canvas dimension matches video
-          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-          }
-
-          // Run Vision Obstacle Detection
-          const detected = await visionDetector.detectObstacles(canvas, video);
-          setDetectedObjects(detected);
-
-          // Find nearest obstacle in front
-          let urgent = null;
-          let minDistance = 999;
-          for (const item of detected) {
-            if (item.distance < minDistance) {
-              minDistance = item.distance;
-              urgent = item;
-            }
-          }
-          setNearestObstacle(urgent);
-
-          // Audio & Speech Announcements
-          const now = Date.now();
-          if (urgent && speechAnnounceEnabled) {
-            const zoneText = ZONE_MAPPING[urgent.zone] || ZONE_MAPPING.center;
-            const hiName = OBSTACLE_NAMES_HI[urgent.label.toLowerCase()] || urgent.label;
-            const distMeters = urgent.distance.toFixed(1);
-
-            // Play directional spatial audio beep
-            if (spatialAudioEnabled) {
-              const pan = urgent.zone === 'left' ? -0.8 : urgent.zone === 'right' ? 0.8 : 0;
-              const freq = urgent.distance < 1.2 ? 880 : urgent.distance < 2.0 ? 550 : 380;
-              audioService.playSpatialBeep(pan, freq, 0.08);
+          try {
+            // Ensure canvas dimension matches video
+            if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
             }
 
-            // Throttled voice announcement (speaks once every 2.8s, or 1.5s for critical proximity <1.0m)
-            const announceCooldown = urgent.distance < 1.0 ? 1500 : 2800;
-            const isDifferentObstacle = lastAnnouncedObstacleRef.current.id !== `${urgent.label}-${urgent.zone}`;
-            const timePassed = (now - lastAnnouncedObstacleRef.current.time) > announceCooldown;
+            // Run Vision Obstacle Detection & Render Bounding Boxes
+            const detected = await visionDetector.detectObstacles(canvas, video);
+            setDetectedObjects(detected || []);
 
-            if (isDifferentObstacle || timePassed) {
-              lastAnnouncedObstacleRef.current = {
-                id: `${urgent.label}-${urgent.zone}`,
-                time: now
-              };
+            // Find nearest obstacle in front
+            let urgent = null;
+            let minDistance = 999;
+            for (const item of (detected || [])) {
+              if (item.distance < minDistance) {
+                minDistance = item.distance;
+                urgent = item;
+              }
+            }
+            setNearestObstacle(urgent);
 
-              let warning = '';
-              if (urgent.distance < 1.2) {
-                warning = `Dhyan rahe, ${hiName} ${zoneText.hi} ${distMeters} meter par hai. Stop.`;
-              } else {
-                warning = `${hiName} ${zoneText.hi}, ${distMeters} meter.`;
+            // Audio & Speech Announcements
+            const now = Date.now();
+            if (urgent && speechAnnounceEnabled) {
+              const zoneText = ZONE_MAPPING[urgent.zone] || ZONE_MAPPING.center;
+              const itemKey = (urgent.class || urgent.label || '').toLowerCase();
+              const hiName = OBSTACLE_NAMES_HI[itemKey] || urgent.label;
+              const distMeters = urgent.distance.toFixed(1);
+
+              // Play directional spatial audio beep
+              if (spatialAudioEnabled) {
+                const pan = urgent.zone === 'left' ? -0.8 : urgent.zone === 'right' ? 0.8 : 0;
+                const freq = urgent.distance < 1.2 ? 880 : urgent.distance < 2.0 ? 550 : 380;
+                audioService.playSpatialBeep(pan, freq, 0.08);
               }
 
-              speechService.speak(warning, { priority: urgent.distance < 1.0, minIntervalMs: announceCooldown });
-              
-              setAnnouncementLog(prev => [
-                {
-                  id: Date.now(),
-                  text: `${urgent.label.toUpperCase()} (${zoneText.en}) • ${distMeters}m`,
-                  time: new Date().toLocaleTimeString(),
-                  level: urgent.distance < 1.2 ? 'danger' : 'warning'
-                },
-                ...prev.slice(0, 15)
-              ]);
+              // Throttled voice announcement (speaks once every 2.4s, or 1.2s for critical proximity <1.0m)
+              const announceCooldown = urgent.distance < 1.2 ? 1400 : 2500;
+              const isDifferentObstacle = lastAnnouncedObstacleRef.current.id !== `${urgent.label}-${urgent.zone}`;
+              const timePassed = (now - lastAnnouncedObstacleRef.current.time) > announceCooldown;
+
+              if (isDifferentObstacle || timePassed) {
+                lastAnnouncedObstacleRef.current = {
+                  id: `${urgent.label}-${urgent.zone}`,
+                  time: now
+                };
+
+                let warning = '';
+                if (urgent.distance < 1.2) {
+                  warning = `Caution! ${urgent.label} ${zoneText.en}, ${distMeters} meters. Dhyan rahe, ${hiName} ${zoneText.hi} hai. Stop!`;
+                } else {
+                  warning = `${urgent.label} ${zoneText.en}, ${distMeters} meters. ${hiName} ${zoneText.hi} hai.`;
+                }
+
+                speechService.speak(warning, { priority: urgent.distance < 1.2, minIntervalMs: announceCooldown });
+                
+                setAnnouncementLog(prev => [
+                  {
+                    id: Date.now(),
+                    text: `${urgent.label.toUpperCase()} (${zoneText.en}) • ${distMeters}m`,
+                    time: new Date().toLocaleTimeString(),
+                    level: urgent.distance < 1.2 ? 'danger' : 'warning'
+                  },
+                  ...prev.slice(0, 15)
+                ]);
+              }
+            } else if ((!detected || detected.length === 0) && (now - lastClearAnnounceRef.current > 12000)) {
+              // Periodic reassurance that path is clear
+              lastClearAnnounceRef.current = now;
+              speechService.speak("Pathway clear. Rasta saaf hai, aage badhein.", { minIntervalMs: 10000 });
             }
-          } else if (detected.length === 0 && (now - lastClearAnnounceRef.current > 12000)) {
-            // Periodic reassurance that path is clear
-            lastClearAnnounceRef.current = now;
-            speechService.speak("Pathway clear. Aage badhein.", { minIntervalMs: 10000 });
-          }
 
-          // Telemetry
-          const elapsed = performance.now() - startTime;
-          frameCounter++;
-          if (performance.now() - fpsTimer >= 1000) {
-            setTelemetry({
-              fps: frameCounter,
-              latency: Math.round(elapsed)
-            });
-            frameCounter = 0;
-            fpsTimer = performance.now();
+            // Telemetry
+            const elapsed = performance.now() - startTime;
+            frameCounter++;
+            if (performance.now() - fpsTimer >= 1000) {
+              setTelemetry({
+                fps: frameCounter,
+                latency: Math.round(elapsed)
+              });
+              frameCounter = 0;
+              fpsTimer = performance.now();
+            }
+          } catch (loopErr) {
+            console.warn('Vision detection frame catch:', loopErr);
+          } finally {
+            isProcessingRef.current = false;
           }
-
-          isProcessingRef.current = false;
         }
       }
 
@@ -307,9 +312,10 @@ export default function VisionAssistant({ onBack }) {
     };
   }, [spatialAudioEnabled, speechAnnounceEnabled]);
 
-  // Voice command listener
+  // Auto-Start camera, warm up AI model & register voice commands
   useEffect(() => {
     startCamera();
+    visionDetector.loadModel();
 
     const unsubscribeIntent = speechService.addIntentListener((intentObj) => {
       if (!intentObj) return;

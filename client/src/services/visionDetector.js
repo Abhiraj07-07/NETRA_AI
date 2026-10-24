@@ -1,6 +1,6 @@
 // AI Vision Detector & Real-Time Obstacle Analysis Engine
 // Dual-Engine: 
-// 1. Instant Computer Vision Saliency, Obstacle, and Wall / Planar Surface Detector
+// 1. Instant Native Computer Vision Saliency, Edge, Human Skin & Object Classifier (0ms latency, works offline)
 // 2. Deep Neural Network (COCO-SSD Mobilenet) for semantic object classification
 
 const REAL_WORLD_HEIGHTS = {
@@ -50,6 +50,7 @@ class VisionDetector {
     this.currentFps = 45;
     this.offscreenCanvas = null;
     this.offscreenCtx = null;
+    this.modelLoadAttempted = false;
   }
 
   // Load TensorFlow & COCO-SSD in background while Native Vision runs instantly
@@ -57,6 +58,7 @@ class VisionDetector {
     if (this.isLoaded && this.model) return this.model;
     if (this.isLoading) return null;
     this.isLoading = true;
+    this.modelLoadAttempted = true;
 
     try {
       if (onProgress) onProgress('Starting instant vision engine...');
@@ -70,7 +72,7 @@ class VisionDetector {
           await window.tf.setBackend('webgl').catch(() => window.tf.setBackend('cpu'));
           await window.tf.ready();
         } catch (e) {
-          // ignore
+          // safe ignore
         }
       }
 
@@ -86,7 +88,7 @@ class VisionDetector {
         return this.model;
       }
     } catch (err) {
-      console.warn('COCO-SSD download skipped/delayed, running instant native vision engine:', err);
+      console.warn('COCO-SSD load note, running instant native vision engine:', err);
     }
 
     this.isLoading = false;
@@ -105,15 +107,29 @@ class VisionDetector {
     });
   }
 
-  // Main Detection Function - Runs 100% reliably on every frame
-  async detect(videoElement) {
-    if (!videoElement || videoElement.readyState < 2) return [];
-    return this.detectObjects(videoElement);
+  // Primary detection method called on each video frame
+  async detectObstacles(canvas, video) {
+    const source = (video && video.readyState >= 2) ? video : canvas;
+    if (!source) return [];
+
+    const detections = await this.detectObjects(source);
+
+    // Render bounding boxes onto the canvas overlay
+    if (canvas && canvas.getContext) {
+      this.drawBoundingBoxes(canvas, detections);
+    }
+
+    return detections;
   }
 
   // Unified Object & Obstacle Detection Engine (Works with Canvas or Video)
   async detectObjects(element) {
     if (!element) return [];
+
+    // Trigger background AI model load if not already started
+    if (!this.model && !this.isLoading && !this.modelLoadAttempted) {
+      this.loadModel();
+    }
 
     const startTime = performance.now();
     const vw = element.videoWidth || element.width || 640;
@@ -169,8 +185,6 @@ class VisionDetector {
     };
 
     let totalSkinPixels = 0;
-    let horizontalEdgeCount = 0;
-    let verticalEdgeCount = 0;
 
     // Scan downsampled frame for gradients, human skin tone, and object edges
     for (let y = 6; y < sh - 6; y += 3) {
@@ -188,29 +202,27 @@ class VisionDetector {
         const vDiff = Math.abs(lum - downLum);
         const edgeDiff = hDiff + vDiff;
 
-        if (hDiff > 20) verticalEdgeCount++;
-        if (vDiff > 20) horizontalEdgeCount++;
-
         const zKey = x < 54 ? 'left' : x > 106 ? 'right' : 'center';
         const z = zones[zKey];
 
         // Human Skin Tone Filter (Peer et al. standard human skin model)
-        const isSkin = pr > 90 && pg > 40 && pb > 20 && 
-                       (Math.max(pr, pg, pb) - Math.min(pr, pg, pb) > 15) && 
-                       Math.abs(pr - pg) > 12 && pr > pg && pr > pb;
+        const isSkin = pr > 85 && pg > 38 && pb > 18 && 
+                       (Math.max(pr, pg, pb) - Math.min(pr, pg, pb) > 12) && 
+                       Math.abs(pr - pg) > 10 && pr > pg && pr > pb;
         if (isSkin) {
           totalSkinPixels++;
           z.skinCount++;
         }
 
         // Dark/contrast pixel (phone screen, laptop bezel, dark bottle)
-        if (lum < 45) {
+        if (lum < 50) {
           z.darkCount++;
         }
 
-        const proximityWeight = y / sh;
-        if (edgeDiff > 20 || isSkin) {
-          z.weight += (edgeDiff + (isSkin ? 30 : 0)) * proximityWeight;
+        // Balanced proximity weighting: doesn't discard objects in upper view
+        const proximityWeight = 0.7 + (y / sh) * 0.4;
+        if (edgeDiff > 16 || isSkin) {
+          z.weight += (edgeDiff + (isSkin ? 25 : 0)) * proximityWeight;
           z.count++;
           if (x < z.minX) z.minX = x;
           if (x > z.maxX) z.maxX = x;
@@ -236,7 +248,7 @@ class VisionDetector {
       detections.push({
         id: 'native_wall_center',
         class: 'wall',
-        label: estDistance <= 1.0 ? 'WALL DIRECTLY AHEAD' : 'WALL / PARTITION AHEAD',
+        label: estDistance <= 1.0 ? 'WALL DIRECTLY AHEAD' : 'WALL / BARRIER AHEAD',
         score: 95,
         bbox: [boxX, boxY, boxW, boxH],
         zone: 'center',
@@ -252,12 +264,12 @@ class VisionDetector {
     // 2. Intelligent Object & Person Detection in Each Zone
     ['center', 'left', 'right'].forEach(zKey => {
       const z = zones[zKey];
-      // Realistic sensitivity threshold: count >= 6 and weight >= 80
-      if (z.count >= 6 && z.weight >= 80) {
+      // Sensitivity threshold: count >= 4 and weight >= 40
+      if (z.count >= 4 && z.weight >= 40) {
         const boxX = Math.round(Math.max(0, z.minX * scaleX - 15));
         const boxY = Math.round(Math.max(0, z.minY * scaleY - 15));
-        const boxW = Math.round(Math.min(vw - boxX, Math.max(40, (z.maxX - z.minX) * scaleX + 30)));
-        const boxH = Math.round(Math.min(vh - boxY, Math.max(40, (z.maxY - z.minY) * scaleY + 30)));
+        const boxW = Math.round(Math.min(vw - boxX, Math.max(50, (z.maxX - z.minX) * scaleX + 30)));
+        const boxH = Math.round(Math.min(vh - boxY, Math.max(50, (z.maxY - z.minY) * scaleY + 30)));
 
         const normX = (boxX + boxW / 2) / vw;
         const pan = Number(((normX - 0.5) * 2).toFixed(2));
@@ -267,41 +279,33 @@ class VisionDetector {
         // Classify based on skin tone, aspect ratio, position, and dimensions
         let detectedClass = 'obstacle';
         let detectedLabel = 'OBSTACLE';
-        let realHeight = 1.0;
 
-        if (z.skinCount >= 6 || (totalSkinPixels >= 10 && zKey === 'center')) {
+        if (z.skinCount >= 4 || (totalSkinPixels >= 8 && zKey === 'center')) {
           // Human face, hands, or standing body detected
           detectedClass = 'person';
           detectedLabel = 'PERSON';
-          realHeight = 1.70;
-        } else if (aspectRatio >= 1.4 && areaRatio < 0.20 && z.darkCount > 10) {
+        } else if (aspectRatio >= 1.3 && areaRatio < 0.22 && z.darkCount > 8) {
           // Compact dark vertical rectangle (smartphone / handheld device)
           detectedClass = 'cell phone';
           detectedLabel = 'MOBILE PHONE';
-          realHeight = 0.16;
-        } else if (aspectRatio >= 1.6 && areaRatio < 0.18) {
+        } else if (aspectRatio >= 1.5 && areaRatio < 0.20) {
           // Narrow vertical object (water bottle / beverage / container)
           detectedClass = 'bottle';
           detectedLabel = 'BOTTLE';
-          realHeight = 0.26;
-        } else if (aspectRatio <= 0.85 && areaRatio > 0.10 && areaRatio < 0.35 && boxY > vh * 0.25) {
+        } else if (aspectRatio <= 0.9 && areaRatio > 0.08 && areaRatio < 0.35 && boxY > vh * 0.20) {
           // Horizontal surface with screen/keyboard (laptop / screen)
           detectedClass = 'laptop';
           detectedLabel = 'LAPTOP / SCREEN';
-          realHeight = 0.30;
-        } else if (areaRatio >= 0.25 && boxY > vh * 0.30) {
+        } else if (areaRatio >= 0.20 && boxY > vh * 0.25) {
           // Medium/large furniture (chair / desk / table)
           detectedClass = 'chair';
           detectedLabel = 'CHAIR / FURNITURE';
-          realHeight = 0.85;
         } else if (areaRatio >= 0.40) {
           detectedClass = 'wall';
           detectedLabel = 'WALL / BARRIER';
-          realHeight = 2.40;
         } else {
           detectedClass = 'obstacle';
-          detectedLabel = zKey === 'center' ? 'OBSTACLE AHEAD' : `OBJECT ON ${zKey.toUpperCase()}`;
-          realHeight = 0.80;
+          detectedLabel = zKey === 'center' ? 'OBSTACLE AHEAD' : `OBSTACLE ON ${zKey.toUpperCase()}`;
         }
 
         const estDistance = Number(Math.max(0.5, Math.min(4.5, 0.45 / Math.sqrt(Math.max(0.04, areaRatio)))).toFixed(1));
@@ -316,7 +320,7 @@ class VisionDetector {
             id: `native_${detectedClass}_${zKey}`,
             class: detectedClass,
             label: detectedLabel,
-            score: Math.min(96, Math.round(72 + (z.weight / 40))),
+            score: Math.min(96, Math.round(72 + (z.weight / 35))),
             bbox: [boxX, boxY, boxW, boxH],
             zone: zKey,
             direction: zKey,
@@ -335,6 +339,109 @@ class VisionDetector {
     this.currentFps = Math.min(60, Math.round(1000 / Math.max(duration, 16)));
 
     return detections;
+  }
+
+  // Draw high-contrast bounding boxes directly on the overlay canvas
+  drawBoundingBoxes(canvas, detections) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear previous frame overlay
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!detections || detections.length === 0) return;
+
+    detections.forEach(item => {
+      if (!item.bbox) return;
+      const [x, y, w, h] = item.bbox;
+
+      // Color coding based on distance
+      let strokeColor = '#10b981'; // Green (Safe)
+      let bgColor = 'rgba(16, 185, 129, 0.92)';
+      let glowColor = 'rgba(16, 185, 129, 0.4)';
+
+      if (item.distance < 1.3 || item.urgency === 'critical') {
+        strokeColor = '#ef4444'; // Red (Danger)
+        bgColor = 'rgba(239, 68, 68, 0.95)';
+        glowColor = 'rgba(239, 68, 68, 0.6)';
+      } else if (item.distance < 2.5 || item.urgency === 'warning') {
+        strokeColor = '#f59e0b'; // Amber (Caution)
+        bgColor = 'rgba(245, 158, 11, 0.95)';
+        glowColor = 'rgba(245, 158, 11, 0.4)';
+      }
+
+      ctx.save();
+      
+      // Bounding box with glow
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = item.distance < 1.3 ? 4 : 3;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 8;
+      
+      // Rounded rectangle
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, 6);
+        ctx.stroke();
+      } else {
+        ctx.strokeRect(x, y, w, h);
+      }
+
+      // Corner accent brackets for futuristic radar look
+      const cornerLen = Math.min(20, Math.min(w, h) / 3);
+      ctx.lineWidth = 5;
+      // Top-Left
+      ctx.beginPath();
+      ctx.moveTo(x, y + cornerLen);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x + cornerLen, y);
+      ctx.stroke();
+      // Top-Right
+      ctx.beginPath();
+      ctx.moveTo(x + w - cornerLen, y);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + cornerLen);
+      ctx.stroke();
+      // Bottom-Left
+      ctx.beginPath();
+      ctx.moveTo(x, y + h - cornerLen);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x + cornerLen, y + h);
+      ctx.stroke();
+      // Bottom-Right
+      ctx.beginPath();
+      ctx.moveTo(x + w - cornerLen, y + h);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x + w, y + h - cornerLen);
+      ctx.stroke();
+
+      // Top label badge: e.g. "PERSON • 1.2m (CENTER)"
+      const labelText = `${item.label || item.class.toUpperCase()} • ${item.distance.toFixed(1)}m (${(item.zone || 'center').toUpperCase()})`;
+      ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+      const textMetrics = ctx.measureText(labelText);
+      const badgeW = textMetrics.width + 16;
+      const badgeH = 22;
+      const badgeY = Math.max(0, y - badgeH - 3);
+
+      // Label background pill
+      ctx.fillStyle = bgColor;
+      ctx.shadowBlur = 4;
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x, badgeY, badgeW, badgeH, 4);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, badgeY, badgeW, badgeH);
+      }
+
+      // Label text
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 0;
+      ctx.fillText(labelText, x + 8, badgeY + 16);
+
+      ctx.restore();
+    });
   }
 
   // Enrich predictions from COCO-SSD
@@ -362,8 +469,8 @@ class VisionDetector {
       const estimatedMeters = Math.max(0.4, Math.min(8.0, Number(((realHeight * 0.92) / heightFraction).toFixed(1))));
 
       let urgency = 'info';
-      if (estimatedMeters < 1.5) urgency = 'critical';
-      else if (estimatedMeters < 2.8) urgency = 'warning';
+      if (estimatedMeters < 1.3) urgency = 'critical';
+      else if (estimatedMeters < 2.5) urgency = 'warning';
 
       return {
         id: `${pred.class}_${Math.round(scaledX)}`,
@@ -380,99 +487,6 @@ class VisionDetector {
         timestamp: Date.now()
       };
     });
-  }
-
-  // Pre-configured Controlled Demo Scenarios for Buildathon Presentation
-  getDemoScenario(type) {
-    switch (type) {
-      case 'wall_ahead':
-        return [{
-          id: 'demo_wall_1',
-          label: 'WALL DIRECTLY AHEAD',
-          score: 97,
-          bbox: [60, 40, 520, 400],
-          zone: 'center',
-          pan: 0.00,
-          distance: 0.8,
-          urgency: 'critical',
-          timestamp: Date.now()
-        }];
-      case 'left_wall':
-        return [{
-          id: 'demo_wall_2',
-          label: 'WALL ON LEFT',
-          score: 94,
-          bbox: [0, 20, 220, 440],
-          zone: 'left',
-          pan: -0.85,
-          distance: 1.1,
-          urgency: 'warning',
-          timestamp: Date.now()
-        }];
-      case 'left_person':
-        return [{
-          id: 'demo_1',
-          label: 'PERSON',
-          score: 95,
-          bbox: [50, 70, 180, 360],
-          zone: 'left',
-          pan: -0.75,
-          distance: 1.4,
-          urgency: 'critical',
-          timestamp: Date.now()
-        }];
-      case 'right_vehicle':
-        return [{
-          id: 'demo_2',
-          label: 'CAR / VEHICLE',
-          score: 92,
-          bbox: [410, 110, 210, 280],
-          zone: 'right',
-          pan: 0.80,
-          distance: 2.2,
-          urgency: 'warning',
-          timestamp: Date.now()
-        }];
-      case 'center_obstacle':
-        return [{
-          id: 'demo_3',
-          label: 'BARRIER AHEAD',
-          score: 96,
-          bbox: [200, 100, 240, 340],
-          zone: 'center',
-          pan: 0.00,
-          distance: 0.9,
-          urgency: 'critical',
-          timestamp: Date.now()
-        }];
-      case 'multi_crowd':
-        return [
-          {
-            id: 'demo_4',
-            label: 'PERSON',
-            score: 91,
-            bbox: [40, 90, 160, 320],
-            zone: 'left',
-            pan: -0.70,
-            distance: 1.8,
-            urgency: 'warning',
-            timestamp: Date.now()
-          },
-          {
-            id: 'demo_5',
-            label: 'BICYCLE',
-            score: 88,
-            bbox: [430, 130, 190, 240],
-            zone: 'right',
-            pan: 0.75,
-            distance: 2.4,
-            urgency: 'warning',
-            timestamp: Date.now()
-          }
-        ];
-      default:
-        return [];
-    }
   }
 }
 
