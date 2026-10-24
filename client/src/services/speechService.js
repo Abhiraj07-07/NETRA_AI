@@ -241,11 +241,24 @@ class SpeechService {
       };
     }
 
-    // 6. SCAN NOW
+    // 6. AI SCENE & OBJECT DESCRIBE ("Samne kya hai", "Batao kya hai", "Describe scene", "What is in front")
     if (
-      text.includes('scan') || text.includes('batao') || text.includes('dekho') || 
-      text.includes('photo') || text.includes('capture') ||
-      text.includes('स्कैन') || text.includes('बताओ') || text.includes('देखो')
+      text.includes('samne kya') || text.includes('kya hai') || text.includes('describe') || 
+      text.includes('kya dikh') || text.includes('batao kya') || text.includes('dekho kya') ||
+      text.includes('what is in front') || text.includes('what do you see') || text.includes('objects') ||
+      text.includes('सामने क्या') || text.includes('क्या है') || text.includes('बताओ क्या') || text.includes('देखो क्या')
+    ) {
+      return {
+        intent: 'DESCRIBE_SCENE',
+        speech: "Analyzing scene and objects in front.",
+        feedback: "Action: Describing Objects in Scene"
+      };
+    }
+
+    // 6.5 SCAN NOW
+    if (
+      text.includes('scan') || text.includes('photo') || text.includes('capture') ||
+      text.includes('स्कैन')
     ) {
       return {
         intent: 'SCAN_NOW',

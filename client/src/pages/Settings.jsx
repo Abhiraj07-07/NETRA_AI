@@ -6,12 +6,15 @@ import {
 import { api } from '../services/api';
 import { audioService } from '../services/audioService';
 import { speechService } from '../services/speechService';
+import { aiVisionService } from '../services/aiVisionService';
 
 export default function Settings({ onBack, highContrast, setHighContrast }) {
   const [speechRate, setSpeechRate] = useState(1.0);
   const [spatialTestStatus, setSpatialTestStatus] = useState('');
   const [savedNotification, setSavedNotification] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [geminiKey, setGeminiKey] = useState(() => aiVisionService.getApiKey());
+  const [keySavedMessage, setKeySavedMessage] = useState('');
 
   // User Personal Profile State
   const [profile, setProfile] = useState(() => {
@@ -349,6 +352,76 @@ export default function Settings({ onBack, highContrast, setHighContrast }) {
               {rate}x Speed
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* AI Vision API & Multimodal Scene Description Settings */}
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center border border-purple-300">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="section-heading text-base font-bold text-slate-900">AI Vision Engine & Gemini API (सामने क्या है?)</h2>
+              <p className="text-xs text-slate-600 font-medium">
+                Deep multimodal visual intelligence for describing objects, distances, and pathways in Hindi.
+              </p>
+            </div>
+          </div>
+          <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-full border ${
+            geminiKey.trim().length > 10 
+              ? 'bg-purple-100 text-purple-900 border-purple-300' 
+              : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+          }`}>
+            {geminiKey.trim().length > 10 ? '✨ Gemini Flash Active' : '⚡ Local AI Active (Offline)'}
+          </span>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-slate-700 block">
+            Google Gemini API Key (Optional — Free from <a href="https://aistudio.google.com" target="_blank" rel="noreferrer" className="text-sky-600 underline">aistudio.google.com</a>):
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={geminiKey}
+              onChange={(e) => setGeminiKey(e.target.value)}
+              placeholder="Paste AI Studio Gemini Key (AIzaSy...)"
+              className="flex-1 bg-slate-50 border border-slate-300 text-slate-900 text-xs px-3 py-2.5 rounded-xl font-mono focus:outline-none focus:border-purple-500"
+            />
+            <button
+              onClick={() => {
+                aiVisionService.setApiKey(geminiKey);
+                setKeySavedMessage('AI Key updated successfully! Gemini Vision enabled.');
+                speechService.speak("AI Vision engine configured.", { priority: true });
+                setTimeout(() => setKeySavedMessage(''), 3000);
+              }}
+              className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl transition-colors shadow-xs"
+            >
+              Save Key
+            </button>
+            {geminiKey && (
+              <button
+                onClick={() => {
+                  setGeminiKey('');
+                  aiVisionService.setApiKey('');
+                  setKeySavedMessage('Cleared key. Reverted to Built-in Local AI Engine.');
+                  speechService.speak("Reverted to built-in local AI engine.");
+                  setTimeout(() => setKeySavedMessage(''), 3000);
+                }}
+                className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-300 transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          {keySavedMessage && (
+            <p className="text-xs text-emerald-700 font-bold font-mono">{keySavedMessage}</p>
+          )}
+          <p className="text-[11px] text-slate-500 leading-relaxed">
+            💡 <strong>Note:</strong> If you don't enter a key, NETRA AI automatically uses its <strong>Built-in Offline AI Object Recognizer</strong> (100% free, zero internet needed) to detect everyday objects, furniture, and walls!
+          </p>
         </div>
       </div>
 

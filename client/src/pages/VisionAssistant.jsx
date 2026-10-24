@@ -8,6 +8,7 @@ import { visionDetector } from '../services/visionDetector';
 import { audioService } from '../services/audioService';
 import { speechService } from '../services/speechService';
 import { smartAssistService } from '../services/smartAssistService';
+import { aiVisionService } from '../services/aiVisionService';
 
 export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
   const videoRef = useRef(null);
@@ -63,6 +64,8 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
         setTimeout(handleManualScan, 300);
       } else if (intent === 'VISION_RADAR') {
         switchMode('obstacles', false);
+      } else if (intent === 'DESCRIBE_SCENE') {
+        handleDescribeScene();
       } else if (intent === 'TORCH') {
         toggleTorch();
       } else if (intent === 'SCAN_NOW') {
@@ -74,9 +77,17 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
       }
     });
 
-    // Spacebar listener to toggle camera or trigger scan
+    // Spacebar listener to toggle camera or trigger scan, and D key to describe scene
     const handleKeyDown = (e) => {
-      if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
+      if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        handleDescribeScene();
+        return;
+      }
+
+      if (e.code === 'Space') {
         e.preventDefault();
         if (visionModeRef.current === 'obstacles') {
           if (isStreaming) {
@@ -308,6 +319,36 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
         }
       }
     }, 400);
+  };
+
+  // AI Multimodal Scene & Object Description (Gemini Vision + Built-in Local AI)
+  const handleDescribeScene = async () => {
+    const canvas = canvasRef.current;
+    if (!canvas || isAnalyzing) return;
+    setIsAnalyzing(true);
+    setAiStatus('AI is analyzing scene objects...');
+    audioService.playSpatialPing(0, 0.8);
+
+    try {
+      const result = await aiVisionService.analyzeAndDescribeScene(canvas, {
+        onStatusUpdate: (msg) => setAiStatus(msg)
+      });
+      if (result && result.text) {
+        setSmartResult({
+          type: 'ai_scene',
+          label: `AI Scene Description (${result.engine})`,
+          text: result.text,
+          engine: result.engine,
+          time: new Date().toLocaleTimeString()
+        });
+        logAnnouncement(`[${result.engine}]: ${result.text}`, 'ai');
+      }
+    } catch (err) {
+      console.error('AI scene describe error:', err);
+    } finally {
+      setIsAnalyzing(false);
+      setAiStatus('Active & Scanning Pathway');
+    }
   };
 
   // Handle spatial audio pings & spoken warnings for obstacles
@@ -710,6 +751,26 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
                 </button>
               )}
 
+              {/* ✨ AI Multimodal Scene & Object Description Button */}
+              <button
+                onClick={handleDescribeScene}
+                disabled={isAnalyzing}
+                className="px-4 py-2.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-sm flex items-center gap-2 transition-all shadow-md shadow-purple-600/25 active:scale-95"
+                title="AI analyzes all objects, walls, and distances in front (Hotkey: D or say 'Samne kya hai')"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>AI Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-amber-300 animate-pulse" />
+                    <span>✨ AI Scene Describe (सामने क्या है?) [D]</span>
+                  </>
+                )}
+              </button>
+
               {/* Instant Scan Frame Button for Currency / OCR / Color */}
               {visionMode !== 'obstacles' && (
                 <button
@@ -774,6 +835,24 @@ export default function VisionAssistant({ onBack, initialMode = 'obstacles' }) {
                   {new Date().toLocaleTimeString()}
                 </span>
               </div>
+
+              {/* AI Multimodal Scene Description Card */}
+              {smartResult?.type === 'ai_scene' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-purple-700 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
+                      {smartResult.label}
+                    </span>
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-900 border border-purple-300">
+                      {smartResult.engine}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-slate-900 leading-relaxed bg-purple-50 p-3.5 rounded-2xl border border-purple-200 shadow-xs">
+                    "{smartResult.text}"
+                  </p>
+                </div>
+              )}
 
               {/* Currency Card */}
               {visionMode === 'currency' && (
