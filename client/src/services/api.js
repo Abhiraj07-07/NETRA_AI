@@ -3,7 +3,7 @@
 const getBaseUrl = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
   if (typeof window !== 'undefined') {
-    if (window.location.port === '5173') return '/api';
+    if (window.location.port && window.location.port.startsWith('517')) return '/api';
     return `http://${window.location.hostname}:5000/api`;
   }
   return 'http://localhost:5000/api';

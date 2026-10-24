@@ -10,7 +10,7 @@ class SocketService {
     if (this.socket) return this.socket;
 
     const defaultUrl = typeof window !== 'undefined' 
-      ? (window.location.port === '5173' ? window.location.origin : `http://${window.location.hostname}:5000`)
+      ? (window.location.port && window.location.port.startsWith('517') ? window.location.origin : `http://${window.location.hostname}:5000`)
       : 'http://localhost:5000';
     const targetUrl = url || defaultUrl;
 
